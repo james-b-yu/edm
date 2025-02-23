@@ -87,3 +87,32 @@ class EGCL(nn.Module):
         return coords_out, features_out
 
 
+
+class EGNN(nn.Module):
+    def __init__(self, config: EGNNConfig):
+        super().__init__()
+        assert config.num_layers > 1
+
+        self.egc_layers = nn.ModuleList([
+            # note: all layers except the first have an additional edge attribute that is equal to the squared coordinate distance at the first layer (page 13)
+            EGCL(EGCLConfig(
+                features_d=config.features_d,
+                node_attr_d=config.node_attr_d,
+                edge_attr_d=config.edge_attr_d + (0 if l == 0 else 1),
+                hidden_d=config.hidden_d)) for l in range(config.num_layers)
+        ])
+
+        self.config = config
+
+    def forward(self, data: EDMDataloaderItem, node_attr: torch.Tensor|None=None, edge_attr: torch.Tensor|None=None):
+        x_e = data.coords[data.edges]  # [NN, 2, 3]
+        d_e = (x_e[:, 0, :] - x_e[:, 1, :]).norm(dim=1).unsqueeze(dim=1) # [NN, 1]
+
+        coords_out = data.coords
+        features_out = data.features
+
+        for l, egcl in enumerate(self.egc_layers):
+            # note: all layers except the first have an additional edge attribute that is equal to the squared coordinate distance at the first layer (page 13)
+            coords_out, features_out = egcl(coords_out, features_out, data.edges, data.reduce, node_attr, edge_attr if l == 0 else torch.cat([d_e ** 2] + ([edge_attr] if edge_attr is not None else []), dim=-1))
+
+        return coords_out, features_out
