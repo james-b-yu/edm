@@ -84,8 +84,8 @@ def test_equivariance_of_egcl_cpu(dummy_dl_cpu, default_egcl_cpu):
         x, h = default_egcl_cpu(coords=data.coords, features=data.features, edges=data.edges, reduce=data.reduce)
         x_rot, h_rot = default_egcl_cpu(coords=data.coords @ Q, features=data.features, edges=data.edges, reduce=data.reduce)
 
-        assert torch.isclose(x @ Q, x_rot, rtol=1e-5).to(torch.float32).mean().all()
-        assert torch.isclose(h, h_rot, rtol=1e-5).to(torch.float32).mean().all()
+        assert torch.isclose(x @ Q, x_rot, atol=1e-5, rtol=1e-5).all()
+        assert torch.isclose(h, h_rot, atol=1e-5, rtol=1e-5).all()
 
 def test_equivariance_of_egcl_cuda(dummy_dl_cuda, default_egcl_cuda):
     """Test the equivariance of the EGCL on CUDA
