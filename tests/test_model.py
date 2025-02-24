@@ -25,25 +25,25 @@ def dummy_dl_cuda():
 
 @pytest.fixture
 def default_egcl_cpu():
-    """get an equivariant graph neural network model on cpu
+    """get an equivariant graph covolutional layer module on cpu
 
     Returns:
-        EGNN:
+        EGCL:
     """
     return EGCL(EGCLConfig(features_d=5, node_attr_d=0, edge_attr_d=0, hidden_d=256))
 
 @pytest.fixture
 def default_egcl_cuda():
-    """get an equivariant graph neural network model on cuda
+    """get an equivariant graph covolutional layer module on cuda
 
     Returns:
-        EGNN:
+        EGCL:
     """
     return EGCL(EGCLConfig(features_d=5, node_attr_d=0, edge_attr_d=0, hidden_d=256)).cuda()
 
 @pytest.fixture
 def default_egnn_cpu():
-    """get an equivariant graph neural network model on cpu
+    """get an equivariant graph neural network module on cpu
 
     Returns:
         EGNN:
@@ -52,7 +52,7 @@ def default_egnn_cpu():
 
 @pytest.fixture
 def default_egnn_cuda():
-    """get an equivariant graph neural network model on cuda
+    """get an equivariant graph neural network module on cuda
 
     Returns:
         EGNN:
