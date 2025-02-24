@@ -15,10 +15,9 @@ class EGCLConfig:
 class EGNNConfig(EGCLConfig):
     num_layers: int
 
-def _make_weight_small(module: nn.Module):
+def _fix_coord_output_variance(module: nn.Module):
     if isinstance(module, nn.Linear):
-        module.weight.data *= 1e-1
-        module.bias.data *= 1e-1
+        module.weight.data *= module.weight.data.shape[1] ** -0.5
 
 class EGCL(nn.Module):
     def __init__(self, config: EGCLConfig):
@@ -57,7 +56,7 @@ class EGCL(nn.Module):
         )
 
         # make the final layer of the coord_mlp have small initial weights, to avoid the network blowing up when we start training (empirically if we do not include this line, then every layer of the EGCL gives a larger magnitude for coords and features, so by the last layer we have a tensor full of nans)
-        self.coord_mlp[-1].apply(_make_weight_small)
+        self.coord_mlp[-1].apply(_fix_coord_output_variance)
 
         # save things
         self.config = config
