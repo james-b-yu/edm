@@ -28,12 +28,14 @@ class EDMDataloaderItem:
         featuers (torch.Tensor): [N, features_d] giving the features of the each atom in the batch
         edges (torch.Tensor): (NN, 2) tensor, where NN = (n_nodes ** 2).sum(). Each row of this tensor gives the indices of atoms within the batch for which there is a directed edge. Note that we do allow edges from a node to itself as this simplifies dealing with the ordering of the edges across the code
         reduce (torch.Tensor): (N, NN) binary matrix where reduce[i, j] = 1 if and only if there is an edge from atom i->j
+        demean (torch.Tensor): (NN, NN) float matrix such that given an [NN, dim] matrix A, the operatation demean @ A gives an [NN, dim] matrix where atom-wise centre of masses are zero
     """
-    n_nodes: torch.Tensor  
-    coords: torch.Tensor  # [N, ]
+    n_nodes: torch.Tensor
+    coords: torch.Tensor
     features: torch.Tensor
     edges: torch.Tensor
     reduce: torch.Tensor
+    demean: torch.Tensor
 
 class EDMDataset(ABC, td.Dataset):
     def __init__(self, features_d=7, max_nodes=25):
@@ -86,23 +88,27 @@ def _collate_fn(data: list[EDMDatasetItem], use_sparse: bool, device: torch.devi
         features = torch.cat([d.features for d in data])
 
         _n_nodes_cumsum = torch.cumsum(torch.cat([torch.tensor([0], dtype=torch.int64), n_nodes]), dim=0)
-        
-        edges = torch.cat([torch.cartesian_prod(torch.arange(b_n.item(), dtype=torch.int64), torch.arange(b_n.item(), dtype=torch.int64)) + _n_nodes_cumsum[b] for b, b_n in enumerate(n_nodes)], dim=0) 
+
+        edges = torch.cat([torch.cartesian_prod(torch.arange(b_n.item(), dtype=torch.int64), torch.arange(b_n.item(), dtype=torch.int64)) + _n_nodes_cumsum[b] for b, b_n in enumerate(n_nodes)], dim=0)
         reduce = torch.block_diag(*[torch.block_diag(*[torch.ones((int(n), )).scatter_(0, torch.tensor([m]), 0) for m in range(n)]) for n in n_nodes])
+        demean = torch.block_diag(*[torch.eye(int(n), dtype=torch.float32) - (torch.ones((int(n), int(n)), dtype=torch.float32) / n) for n in n_nodes])
 
         # get them all on the relevant device
         n_nodes = n_nodes.to(device)
         coords  = coords.to(device)
         features = features.to(device)
         edges = edges.to(device)
-        reduce: torch.Tensor = reduce.to(device)
+        reduce = reduce.to(device)
+        demean = demean.to(device)
+
+        coords = demean @ coords  # immediately demean the coords
 
         if use_sparse:
             reduce = reduce.to_sparse_csr()
 
         _xe = coords[edges]
 
-        return EDMDataloaderItem(n_nodes=n_nodes, coords=coords, features=features, edges=edges, reduce=reduce)
+        return EDMDataloaderItem(n_nodes=n_nodes, coords=coords, features=features, edges=edges, reduce=reduce, demean=demean)
 
 def get_dummy_dataloader(features_d: int, len: int, max_nodes: int, batch_size: int, device, use_sparse=True):
 
