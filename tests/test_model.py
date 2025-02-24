@@ -11,7 +11,7 @@ def dummy_dl_cpu():
     Returns:
         Dataloader:
     """
-    return get_dummy_dataloader(features_d=7, len=2, max_nodes=25, batch_size=64, device="cpu")
+    return get_dummy_dataloader(num_atom_classes=5, len=1000, max_nodes=25, batch_size=64, device="cpu")
 
 @pytest.fixture
 def dummy_dl_cuda():
@@ -20,7 +20,7 @@ def dummy_dl_cuda():
     Returns:
         Dataloader:
     """
-    return get_dummy_dataloader(features_d=7, len=2, max_nodes=25, batch_size=64, device="cuda")
+    return get_dummy_dataloader(num_atom_classes=5, len=1000, max_nodes=25, batch_size=64, device="cuda")
 
 @pytest.fixture
 def default_egnn_cpu():
