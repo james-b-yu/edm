@@ -97,22 +97,25 @@ class EGNN(nn.Module):
             # note: all layers except the first have an additional edge attribute that is equal to the squared coordinate distance at the first layer (page 13)
             EGCL(EGCLConfig(
                 features_d=config.features_d,
-                node_attr_d=config.node_attr_d,
-                edge_attr_d=config.edge_attr_d + (0 if l == 0 else 1),
+                node_attr_d=config.node_attr_d + 1, # t/T is an additional node attribute
+                edge_attr_d=config.edge_attr_d + (0 if l == 0 else 1), # distance between atoms at layer 0 becomes an additional extra edge attribute for layers 1, 2, ...
                 hidden_d=config.hidden_d)) for l in range(config.num_layers)
         ])
 
         self.config = config
 
-    def forward(self, data: EDMDataloaderItem, node_attr: torch.Tensor|None=None, edge_attr: torch.Tensor|None=None):
+    def forward(self, data: EDMDataloaderItem, time: float, node_attr: torch.Tensor|None=None, edge_attr: torch.Tensor|None=None):
         x_e = data.coords[data.edges]  # [NN, 2, 3]
         d_e = (x_e[:, 0, :] - x_e[:, 1, :]).norm(dim=1).unsqueeze(dim=1) # [NN, 1]
 
         coords_out = data.coords
         features_out = data.features
+        
+        node_attr_with_time     = torch.cat([time * torch.ones(size=(data.coords.shape[0], 1), dtype=data.coords.dtype, layout=data.coords.layout, device=data.coords.device)] + ([node_attr] if node_attr is not None else []), dim=-1)
+        edge_attr_with_distance = torch.cat([d_e ** 2] + ([edge_attr] if edge_attr is not None else []), dim=-1)
 
         for l, egcl in enumerate(self.egc_layers):
             # note: all layers except the first have an additional edge attribute that is equal to the squared coordinate distance at the first layer (page 13)
-            coords_out, features_out = egcl(coords_out, features_out, data.edges, data.reduce, node_attr, edge_attr if l == 0 else torch.cat([d_e ** 2] + ([edge_attr] if edge_attr is not None else []), dim=-1))
+            coords_out, features_out = egcl(coords_out, features_out, data.edges, data.reduce, node_attr_with_time, edge_attr if l == 0 else edge_attr_with_distance)
 
         return coords_out, features_out
