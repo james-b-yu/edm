@@ -27,8 +27,8 @@ class EDMDataloaderItem:
         coords (torch.Tensor): [N, 3], where N = n_nodes.sum(), giving the 3D coordinates of each atom in the batch
         featuers (torch.Tensor): [N, num_atom_classes] giving the features of the each atom in the batch
         edges (torch.Tensor): (NN, 2) tensor, where NN = (n_nodes ** 2).sum(). Each row of this tensor gives the indices of atoms within the batch for which there is a directed edge. Note that we do allow edges from a node to itself as this simplifies dealing with the ordering of the edges across the code
-        reduce (torch.Tensor): (N, NN) binary matrix where reduce[i, j] = 1 if and only if there is an edge from atom i->j
-        demean (torch.Tensor): (NN, NN) float matrix such that given an [NN, dim] matrix A, the operatation demean @ A gives an [NN, dim] matrix where atom-wise centre of masses are zero
+        reduce (torch.Tensor): (N, NN) binary float matrix where reduce[i, j] = 1.0 if and only if there is an edge from atom i->j
+        demean (torch.Tensor): (NN, NN) float matrix such that given an [NN, dim] matrix A, the operatation demean @ A gives an [NN, dim] matrix where molecule-wise centre of masses are zero
     """
     n_nodes: torch.Tensor
     coords: torch.Tensor
