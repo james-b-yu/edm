@@ -1,8 +1,15 @@
+from pathlib import Path
+from typing import Literal
 import torch
 from torch.utils import data as td
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from functools import partial
+from os import path
+
+from args import args
+from utils.files import hash_file
+from utils.qm9 import ensure_qm9_raw_data, ensure_qm9_raw_excluded, ensure_qm9_raw_splits, ensure_qm9_raw_thermo, ensure_qm9_processed
 
 @dataclass
 class EDMDatasetItem:
@@ -38,7 +45,7 @@ class EDMDataloaderItem:
     demean: torch.Tensor
 
 class EDMDataset(ABC, td.Dataset):
-    def __init__(self, num_atom_classes=7, max_nodes=25):
+    def __init__(self, len: int, num_atom_classes, max_nodes):
         """initialise EDM dataset
 
         Args:
@@ -47,27 +54,38 @@ class EDMDataset(ABC, td.Dataset):
         """
         super().__init__()
         assert num_atom_classes > 2
+        assert len > 2
+        self.len = len
         self.num_atom_classes = num_atom_classes
         self.max_nodes = max_nodes
 
-    @abstractmethod
     def __len__(self) -> int:
-        pass
+        return self.len
 
     @abstractmethod
     def __getitem__(self, index) -> EDMDatasetItem:
         pass
 
+class QM9Dataset(EDMDataset):
+    def __init__(self, use_h: bool, split: Literal["train", "valid", "test"]):
+        super().__init__(9, num_atom_classes=5 if use_h else 4, max_nodes=29 if use_h else 9) # TODO
+        self.use_h = use_h
+        
+        processed_filename = f"{split}_{"h" if use_h else "no_h"}"
+        self._processed_path = path.join(args.data_dir, "qm9", f"{processed_filename}.npz")
+        if not (Path(self._processed_path).is_file() and hash_file(self._processed_path) == getattr(args, f"qm9_{processed_filename}_npz_md5")):
+            ensure_qm9_processed(path.join(args.data_dir, "qm9"), use_h)
+        pass
+
+    def __getitem__(self, index) -> EDMDatasetItem:
+        raise NotImplementedError()
+
 class DummyDataset(EDMDataset):
     """Dummy dataset
     """
-    def __init__(self, num_atom_classes=7, max_nodes=25, len=10000):
-        super().__init__(num_atom_classes, max_nodes)
-        self.len = len
+    def __init__(self, len=10000, num_atom_classes=7, max_nodes=25):
+        super().__init__(len, num_atom_classes, max_nodes)
         self.rng = torch.random
-
-    def __len__(self) -> int:
-        return self.len
 
     def __getitem__(self, index) -> EDMDatasetItem:
         """
