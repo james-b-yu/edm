@@ -162,6 +162,6 @@ def get_dummy_dataloader(num_atom_classes: int, len: int, max_nodes: int, batch_
 
     return td.DataLoader(dataset=DummyDataset(num_atom_classes=num_atom_classes, max_nodes=max_nodes, len=len), batch_size=batch_size, collate_fn=collate_fn)
 
-def get_qm9_dataloader(use_h: bool, split: Literal["train", "valid", "test"], batch_size: int, prefetch_factor: int|None=8, num_workers = 0 if cpu_count() < 4 else int(0.75 * cpu_count()), pin_memory=False, shuffle=True, use_sparse=False):
+def get_qm9_dataloader(use_h: bool, split: Literal["train", "valid", "test"], batch_size: int, prefetch_factor: int|None=4, num_workers = 0 if cpu_count() < 4 else int(0.5 * cpu_count()), pin_memory=True, shuffle=True, use_sparse=False):
     collate_fn = partial(_collate_fn, use_sparse=use_sparse)
     return td.DataLoader(dataset=QM9Dataset(use_h=use_h, split=split), batch_size=batch_size, collate_fn=collate_fn, pin_memory=pin_memory, prefetch_factor=prefetch_factor, num_workers=num_workers, shuffle=shuffle)
