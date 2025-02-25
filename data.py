@@ -138,7 +138,7 @@ class DummyDataset(EDMDataset):
 
         return EDMDatasetItem(n_nodes=n_nodes, coords=coords, features=features)
 
-def _collate_fn(data: list[EDMDatasetItem], use_sparse: bool):
+def _collate_fn(data: list[EDMDatasetItem]):
         n_nodes = torch.tensor([d.n_nodes for d in data], dtype=torch.int64)
         coords = torch.cat([d.coords for d in data])
         features = torch.cat([d.features for d in data])
@@ -151,17 +151,10 @@ def _collate_fn(data: list[EDMDatasetItem], use_sparse: bool):
 
         coords = demean @ coords  # immediately demean the coords
 
-        if use_sparse:
-            reduce = reduce.to_sparse_csr()
-
         return EDMDataloaderItem(n_nodes=n_nodes, coords=coords, features=features, edges=edges, reduce=reduce, demean=demean)
 
-def get_dummy_dataloader(num_atom_classes: int, len: int, max_nodes: int, batch_size: int, use_sparse=False):
+def get_dummy_dataloader(num_atom_classes: int, len: int, max_nodes: int, batch_size: int):
+    return td.DataLoader(dataset=DummyDataset(num_atom_classes=num_atom_classes, max_nodes=max_nodes, len=len), batch_size=batch_size, collate_fn=_collate_fn)
 
-    collate_fn = partial(_collate_fn, use_sparse=use_sparse)
-
-    return td.DataLoader(dataset=DummyDataset(num_atom_classes=num_atom_classes, max_nodes=max_nodes, len=len), batch_size=batch_size, collate_fn=collate_fn)
-
-def get_qm9_dataloader(use_h: bool, split: Literal["train", "valid", "test"], batch_size: int, prefetch_factor: int|None=4, num_workers = 0 if cpu_count() < 4 else int(0.5 * cpu_count()), pin_memory=True, shuffle=True, use_sparse=False):
-    collate_fn = partial(_collate_fn, use_sparse=use_sparse)
-    return td.DataLoader(dataset=QM9Dataset(use_h=use_h, split=split), batch_size=batch_size, collate_fn=collate_fn, pin_memory=pin_memory, prefetch_factor=prefetch_factor, num_workers=num_workers, shuffle=shuffle)
+def get_qm9_dataloader(use_h: bool, split: Literal["train", "valid", "test"], batch_size: int, prefetch_factor: int|None=4, num_workers = 0 if cpu_count() < 4 else int(0.5 * cpu_count()), pin_memory=True, shuffle=True):
+    return td.DataLoader(dataset=QM9Dataset(use_h=use_h, split=split), batch_size=batch_size, collate_fn=_collate_fn, pin_memory=pin_memory, prefetch_factor=prefetch_factor, num_workers=num_workers, shuffle=shuffle)
