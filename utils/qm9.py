@@ -11,6 +11,56 @@ from .misc import is_int
 from .files import delete_folder, hash_directory, hash_file, urlretrieve, tar_extractall
 from args import args
 
+
+def get_crg_cls_dicts(use_h: bool):
+    """get dicts converting between charge and class indices
+
+    Args:
+        use_h (bool): whether we are using hydrogens
+
+    Returns:
+        tuple[dict[int, int], dict[int, int]]: charge to class, class to charge
+    """
+    if use_h:
+        crg_to_cls = {
+            1: 0,  # H
+            6: 1,  # C
+            7: 2,  # N
+            8: 3,  # O
+            9: 4   # F
+        }
+    else:
+        crg_to_cls = {
+            6: 0,  # C
+            7: 1,  # N
+            8: 2,  # O
+            9: 3   # F
+        }
+        
+    cls_to_crg = {val: key for key, val in crg_to_cls.items()}
+    return crg_to_cls, cls_to_crg
+
+def charge_to_idx(charges: np.ndarray, use_h: bool):
+    """given a np array of charges, return an np array of the same shape but with charges replaced with class indices
+
+    Args:
+        charges (np.ndarray):
+    """
+    orig_dtype = charges.dtype
+
+    crg_to_cls, _ = get_crg_cls_dicts(use_h)
+    where_cls: list[tuple[np.ndarray, int]] = []
+    
+    for crg, cls in crg_to_cls.items():
+        where_cls.append((charges == crg, cls))
+    
+    for where, cls in where_cls:
+        charges[where] = cls
+    
+    assert charges.dtype == orig_dtype
+    return charges
+        
+
 def process_xyz_qm9(xyz_path: str, use_h: bool):
     """
     Read xyz file and return a molecular dict with number of atoms, energy, forces, coordinates and atom-type for the gdb9 dataset.
@@ -58,7 +108,10 @@ def process_xyz_qm9(xyz_path: str, use_h: bool):
         atom_positions = [p for i, p in enumerate(atom_positions) if atom_charges[i] != 1]
         atom_charges = [c for c in atom_charges if c != 1]
 
-    molecule = {'num_atoms': np.array(num_atoms, dtype=np.int64), 'charges': np.array(atom_charges + [0] * (max_num_nodes - len(atom_charges)), dtype=np.int64), 'positions': np.array(atom_positions + [[0.0, 0.0, 0.0]] * (max_num_nodes - len(atom_charges)), dtype=np.float32)}
+    charges = np.array(atom_charges + [0] * (max_num_nodes - len(atom_charges)), dtype=np.int64)
+    classes = charge_to_idx(charges, use_h)
+
+    molecule = {'num_atoms': np.array(num_atoms, dtype=np.int64), 'charges': charges, 'classes': classes, 'positions': np.array(atom_positions + [[0.0, 0.0, 0.0]] * (max_num_nodes - len(atom_charges)), dtype=np.float32)}
     molecule.update({key: np.array(value, dtype=np.float32) for key, value in mol_props.items()})
 
     return molecule

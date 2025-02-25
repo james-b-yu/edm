@@ -1,15 +1,17 @@
 from pathlib import Path
 from typing import Literal
+import numpy as np
 import torch
 from torch.utils import data as td
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from functools import partial
 from os import path
+from multiprocessing import cpu_count
 
 from args import args
 from utils.files import hash_file
-from utils.qm9 import ensure_qm9_raw_data, ensure_qm9_raw_excluded, ensure_qm9_raw_splits, ensure_qm9_raw_thermo, ensure_qm9_processed
+from utils.qm9 import charge_to_idx, ensure_qm9_raw_data, ensure_qm9_raw_excluded, ensure_qm9_raw_splits, ensure_qm9_raw_thermo, ensure_qm9_processed
 
 @dataclass
 class EDMDatasetItem:
@@ -43,9 +45,22 @@ class EDMDataloaderItem:
     edges: torch.Tensor
     reduce: torch.Tensor
     demean: torch.Tensor
+    
+    def to_(self, *args, **kwargs):
+        """calls `torch.Tensor.to` on all tensors, assigning the results
+        """
+        self.n_nodes = self.n_nodes.to(*args, **kwargs)
+        self.coords = self.coords.to(*args, **kwargs)
+        self.features = self.features.to(*args, **kwargs)
+        self.edges = self.edges.to(*args, **kwargs)
+        self.reduce = self.reduce.to(*args, **kwargs)
+        self.demean = self.demean.to(*args, **kwargs)
+
+QM9Attributes = Literal["index", "A", "B", "C", "mu", "alpha", "homo", "lumo", "gap", "r2", "zpve", "U0", "U", "H", "G", "Cv", "omega1"]
+QM9ProcessedData = dict[Literal["num_atoms", "classes", "charges", "positions", QM9Attributes], torch.Tensor]
 
 class EDMDataset(ABC, td.Dataset):
-    def __init__(self, len: int, num_atom_classes, max_nodes):
+    def __init__(self, num_atom_classes, max_nodes):
         """initialise EDM dataset
 
         Args:
@@ -54,13 +69,13 @@ class EDMDataset(ABC, td.Dataset):
         """
         super().__init__()
         assert num_atom_classes > 2
-        assert len > 2
-        self.len = len
+
         self.num_atom_classes = num_atom_classes
         self.max_nodes = max_nodes
 
+    @abstractmethod
     def __len__(self) -> int:
-        return self.len
+        pass
 
     @abstractmethod
     def __getitem__(self, index) -> EDMDatasetItem:
@@ -68,24 +83,46 @@ class EDMDataset(ABC, td.Dataset):
 
 class QM9Dataset(EDMDataset):
     def __init__(self, use_h: bool, split: Literal["train", "valid", "test"]):
-        super().__init__(9, num_atom_classes=5 if use_h else 4, max_nodes=29 if use_h else 9) # TODO
+        super().__init__(num_atom_classes=5 if use_h else 4, max_nodes=29 if use_h else 9) # TODO
+        
+        assert split in ["train", "valid", "test"]
+        
+        self.split = split
         self.use_h = use_h
         
         processed_filename = f"{split}_{"h" if use_h else "no_h"}"
         self._processed_path = path.join(args.data_dir, "qm9", f"{processed_filename}.npz")
         if not (Path(self._processed_path).is_file() and hash_file(self._processed_path) == getattr(args, f"qm9_{processed_filename}_npz_md5")):
             ensure_qm9_processed(path.join(args.data_dir, "qm9"), use_h)
-        pass
+        
+        self._data: QM9ProcessedData = {key: torch.from_numpy(val) for key, val in np.load(self._processed_path).items()}
+        self._len  = len(self._data["num_atoms"])
 
+    def __len__(self) -> int:
+        return self._len
+    
     def __getitem__(self, index) -> EDMDatasetItem:
-        raise NotImplementedError()
+        n_nodes = self._data["num_atoms"][index]
+        coords = self._data["positions"][index, :n_nodes]
+        classes = self._data["classes"][index, :n_nodes]
+        eye = torch.eye(self.num_atom_classes)
+        
+        return EDMDatasetItem(
+            n_nodes = int(n_nodes),
+            coords = coords,
+            features = eye[classes]
+        )
 
 class DummyDataset(EDMDataset):
     """Dummy dataset
     """
     def __init__(self, len=10000, num_atom_classes=7, max_nodes=25):
-        super().__init__(len, num_atom_classes, max_nodes)
+        super().__init__(num_atom_classes, max_nodes)
+        self.len = len
         self.rng = torch.random
+
+    def __len__(self):
+        return self.len
 
     def __getitem__(self, index) -> EDMDatasetItem:
         """
@@ -101,7 +138,7 @@ class DummyDataset(EDMDataset):
 
         return EDMDatasetItem(n_nodes=n_nodes, coords=coords, features=features)
 
-def _collate_fn(data: list[EDMDatasetItem], use_sparse: bool, device: torch.device):
+def _collate_fn(data: list[EDMDatasetItem], use_sparse: bool):
         n_nodes = torch.tensor([d.n_nodes for d in data], dtype=torch.int64)
         coords = torch.cat([d.coords for d in data])
         features = torch.cat([d.features for d in data])
@@ -112,25 +149,19 @@ def _collate_fn(data: list[EDMDatasetItem], use_sparse: bool, device: torch.devi
         reduce = torch.block_diag(*[torch.block_diag(*[torch.ones((int(n), )).scatter_(0, torch.tensor([m]), 0) for m in range(n)]) for n in n_nodes])
         demean = torch.block_diag(*[torch.eye(int(n), dtype=torch.float32) - (torch.ones((int(n), int(n)), dtype=torch.float32) / n) for n in n_nodes])
 
-        # get them all on the relevant device
-        n_nodes = n_nodes.to(device)
-        coords  = coords.to(device)
-        features = features.to(device)
-        edges = edges.to(device)
-        reduce = reduce.to(device)
-        demean = demean.to(device)
-
         coords = demean @ coords  # immediately demean the coords
 
         if use_sparse:
             reduce = reduce.to_sparse_csr()
 
-        _xe = coords[edges]
-
         return EDMDataloaderItem(n_nodes=n_nodes, coords=coords, features=features, edges=edges, reduce=reduce, demean=demean)
 
-def get_dummy_dataloader(num_atom_classes: int, len: int, max_nodes: int, batch_size: int, device, use_sparse=True):
+def get_dummy_dataloader(num_atom_classes: int, len: int, max_nodes: int, batch_size: int, use_sparse=False):
 
-    collate_fn = partial(_collate_fn, use_sparse=use_sparse, device=device)
+    collate_fn = partial(_collate_fn, use_sparse=use_sparse)
 
     return td.DataLoader(dataset=DummyDataset(num_atom_classes=num_atom_classes, max_nodes=max_nodes, len=len), batch_size=batch_size, collate_fn=collate_fn)
+
+def get_qm9_dataloader(use_h: bool, split: Literal["train", "valid", "test"], batch_size: int, prefetch_factor: int|None=8, num_workers = 0 if cpu_count() < 4 else int(0.75 * cpu_count()), pin_memory=False, shuffle=True, use_sparse=False):
+    collate_fn = partial(_collate_fn, use_sparse=use_sparse)
+    return td.DataLoader(dataset=QM9Dataset(use_h=use_h, split=split), batch_size=batch_size, collate_fn=collate_fn, pin_memory=pin_memory, prefetch_factor=prefetch_factor, num_workers=num_workers, shuffle=shuffle)
