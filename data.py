@@ -56,7 +56,7 @@ class EDMDataloaderItem:
         self.reduce = self.reduce.to(*args, **kwargs)
         self.demean = self.demean.to(*args, **kwargs)
 
-QM9Attributes = Literal["index", "A", "B", "C", "mu", "alpha", "homo", "lumo", "gap", "r2", "zpve", "U0", "U", "H", "G", "Cv", "omega1"]
+QM9Attributes = Literal["index", "A", "B", "C", "mu", "alpha", "homo", "lumo", "gap", "r2", "zpve", "U0", "U", "H", "G", "Cv", "omega1", "zpve_thermo", "U0_thermo", "U_thermo", "H_thermo", "G_thermo", "Cv_thermo"]
 QM9ProcessedData = dict[Literal["num_atoms", "classes", "charges", "positions", QM9Attributes], torch.Tensor]
 
 class EDMDataset(ABC, td.Dataset):

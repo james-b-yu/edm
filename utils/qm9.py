@@ -61,7 +61,7 @@ def charge_to_idx(charges: np.ndarray, use_h: bool):
     return charges
         
 
-def process_xyz_qm9(xyz_path: str, use_h: bool):
+def process_xyz_qm9(xyz_path: str, use_h: bool, therm_dict: dict[str, dict[str, float]]):
     """
     Read xyz file and return a molecular dict with number of atoms, energy, forces, coordinates and atom-type for the gdb9 dataset.
 
@@ -101,6 +101,17 @@ def process_xyz_qm9(xyz_path: str, use_h: bool):
     mol_props = [int(mol_props[1])] + [float(x) for x in mol_props[2:]]
     mol_props = dict(zip(prop_strings, mol_props))
     mol_props['omega1'] = max(float(omega) for omega in mol_freq.split())
+
+    # now calculate thermo energy
+    charge_counts = np.unique(atom_charges, return_counts=True)
+    for target, therm_target in therm_dict.items():
+        therm_res = 0.0
+        for z, z_count in zip(*charge_counts):
+            assert z != 0
+            assert str(z) in therm_target
+            therm_res += therm_target[str(z)] * z_count
+        
+        mol_props[f"{target}_thermo"] = therm_res
 
     # now get rid of hydrogens if we are using the non-hydrogen dataset
     if not use_h:
@@ -144,7 +155,7 @@ def ensure_qm9_raw_data(parent_path: str):
 
     if not Path(data_path).is_dir():
         do_download = True
-    elif hash_directory(data_path, desc="Checking integrety of raw QM9 data") != args.qm9_raw_xyz_dir_md5:
+    elif hash_directory(data_path, desc="Checking integrity of raw QM9 data") != args.qm9_raw_xyz_dir_md5:
         delete_folder(data_path, desc="Deleting raw QM9 data")
         do_download = True
     
@@ -301,13 +312,18 @@ def ensure_qm9_processed(disk_path: str, use_h: bool):
     
     xyz_dir_path = path.join(raw_path, "xyz")
     splits_path = path.join(raw_path, "splits.npz")
+    therm_path = path.join(raw_path, "thermo.json")
+    
+    with open(therm_path, "r", encoding="utf8") as f:
+        therm_dict = json.load(f)
+    
     xyz_file_paths = []
     
     for root, _, filenames in os.walk(xyz_dir_path):
         for filename in tqdm(filenames, unit="file", leave=False, desc="Gathering raw QM9 XYZ files"):
             xyz_file_paths.append(path.join(root, filename))
             
-    xyz_files_processed = np.array([process_xyz_qm9(p, use_h) for p in tqdm(xyz_file_paths, unit="file", leave=False, desc="Processing raw QM9 XYZ files")])
+    xyz_files_processed = np.array([process_xyz_qm9(p, use_h, therm_dict) for p in tqdm(xyz_file_paths, unit="file", leave=False, desc="Processing raw QM9 XYZ files")])
     splits = np.load(splits_path)
     
     processed = {key: _collate(xyz_files_processed[val]) for key, val in tqdm(splits.items(), unit="dataset", leave=False, desc="Collating datasets")}

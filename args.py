@@ -24,11 +24,11 @@ parser.add_argument("--qm9-raw-spilts-npz-md5", default="a4ddef020412e8577429f35
 parser.add_argument("--qm9-raw-atomref-txt-md5", default="2d30b2df8329d8fd805c0a4d158a0a0f", help="md5 hash of the raw qm9 atomref.txt file")
 parser.add_argument("--qm9-raw-thermo-json-md5", default="f26b44bd4129e1556065f46c9b3c2efa", help="md5 hash of the raw qm9 splits.npz file")
 
-parser.add_argument("--qm9-train-h-npz-md5", default="6b31c02c92243566f0cdeb5cd724b411", help="md5 hash of the processed qm9 train_h.npz file")
-parser.add_argument("--qm9-train-no-h-npz-md5", default="09e27536af8744ee6c8833268eecaaba", help="md5 hash of the processed qm9 train_no_h.npz file")
-parser.add_argument("--qm9-valid-h-npz-md5", default="78c859bbbd8bdb2005f5a8286a7236ab", help="md5 hash of the processed qm9 valid_h.npz file")
-parser.add_argument("--qm9-valid-no-h-npz-md5", default="5024c4ee09fa6078cf9cfe5fd81314ea", help="md5 hash of the processed qm9 valid_no_h.npz file")
-parser.add_argument("--qm9-test-h-npz-md5", default="ba06d1320c4a968159062d62e8a5a834", help="md5 hash of the processed qm9 test_h.npz file")
-parser.add_argument("--qm9-test-no-h-npz-md5", default="5825239e6ffe391d3a7dc3d544eb83ae", help="md5 hash of the processed qm9 test_no_h.npz file")
+parser.add_argument("--qm9-train-h-npz-md5", default="1983968ed7fecb60f12ddde58cea32c1", help="md5 hash of the processed qm9 train_h.npz file")
+parser.add_argument("--qm9-train-no-h-npz-md5", default="917b45088735de67dbaf17cfcf0a7128", help="md5 hash of the processed qm9 train_no_h.npz file")
+parser.add_argument("--qm9-valid-h-npz-md5", default="97f8e95f598a16ab51996e58b6e836da", help="md5 hash of the processed qm9 valid_h.npz file")
+parser.add_argument("--qm9-valid-no-h-npz-md5", default="fe4a7d1605106be3e3970aaf90c9219c", help="md5 hash of the processed qm9 valid_no_h.npz file")
+parser.add_argument("--qm9-test-h-npz-md5", default="c6933531acc8f4153bc18149470155b9", help="md5 hash of the processed qm9 test_h.npz file")
+parser.add_argument("--qm9-test-no-h-npz-md5", default="522e5f0fe4087e26c0713f723bead062", help="md5 hash of the processed qm9 test_no_h.npz file")
 
 args = parser.parse_args()
