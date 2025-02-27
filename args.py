@@ -17,6 +17,9 @@ parser.add_argument("--data-dir", default="./data", type=str, help="directory in
 parser.add_argument("--qm9-data-url", default="https://springernature.figshare.com/ndownloader/files/3195389", type=str, help="url from which to retrieve the raw xyz.tar.bz2 dataset")
 parser.add_argument("--qm9-excluded-url", default="https://springernature.figshare.com/ndownloader/files/3195404", type=str, help="url from which to retrieve the excluded.txt file")
 parser.add_argument("--qm9-atomref-url", default="https://springernature.figshare.com/ndownloader/files/3195395", type=str, help="url from which to retrieve the atomref.txt file")
+
+parser.add_argument("--check-md5", action="store_true", default=False, help="Enable hash checking")
+
 parser.add_argument("--qm9-raw-xyz-tar-md5", default="ad1ebd51ee7f5b3a6e32e974e5d54012", type=str, help="md5 hash of the raw qm9 tarball")
 parser.add_argument("--qm9-raw-xyz-dir-md5", default="57fbe9a55b26af84d274f550a62a9225", type=str, help="md5 hash of the raw qm9 xyz directory")
 parser.add_argument("--qm9-raw-excluded-txt-md5", default="a361887bacb427b8a0ce7903d92a53b4", help="md5 hash of the raw qm9 excluded.txt file")

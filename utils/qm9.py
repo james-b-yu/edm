@@ -8,7 +8,7 @@ import json
 
 
 from .misc import is_int
-from .files import delete_folder, hash_directory, hash_file, urlretrieve, tar_extractall
+from .files import check_hash_directory, check_hash_file, delete_folder, hash_directory, hash_file, urlretrieve, tar_extractall
 from args import args
 
 
@@ -135,7 +135,7 @@ def _download_and_extract_data(data_path: str):
     """
     tar_path = data_path + ".tar.bz2"
     
-    if not (Path(tar_path).is_file() and hash_file(tar_path) == args.qm9_raw_xyz_tar_md5):
+    if not (Path(tar_path).is_file() and check_hash_file(tar_path, args.qm9_raw_xyz_tar_md5)):
         urlretrieve(url=args.qm9_data_url, filename=tar_path, desc="Downloading raw QM9 data")
         
     tar_extractall(tar_path=tar_path, extract_path=data_path, desc="Extracting raw QM9 data")
@@ -155,7 +155,7 @@ def ensure_qm9_raw_data(parent_path: str):
 
     if not Path(data_path).is_dir():
         do_download = True
-    elif hash_directory(data_path, desc="Checking integrity of raw QM9 data") != args.qm9_raw_xyz_dir_md5:
+    elif not check_hash_directory(data_path, args.qm9_raw_xyz_dir_md5, desc="Checking integrity of raw QM9 data"):
         delete_folder(data_path, desc="Deleting raw QM9 data")
         do_download = True
     
@@ -171,7 +171,7 @@ def ensure_qm9_raw_excluded(parent_path: str):
     
     excluded_path = path.join(parent_path, "excluded.txt")
     
-    if not (Path(excluded_path).is_file() and hash_file(excluded_path) == args.qm9_raw_excluded_txt_md5):
+    if not (Path(excluded_path).is_file() and check_hash_file(excluded_path, args.qm9_raw_excluded_txt_md5)):
         urlretrieve(url=args.qm9_excluded_url, filename=excluded_path, desc="Downloading raw QM9 excluded.txt")
         
 def ensure_qm9_raw_splits(parent_path: str):
@@ -182,12 +182,12 @@ def ensure_qm9_raw_splits(parent_path: str):
     """
     splits_path = path.join(parent_path, "splits.npz")
     
-    if Path(splits_path).is_file() and hash_file(splits_path) == args.qm9_raw_spilts_npz_md5:
+    if Path(splits_path).is_file() and check_hash_file(splits_path, args.qm9_raw_spilts_npz_md5):
         return
     
     excluded_path = path.join(parent_path, "excluded.txt")
     
-    assert Path(excluded_path).is_file() and hash_file(excluded_path) == args.qm9_raw_excluded_txt_md5
+    assert Path(excluded_path).is_file() and check_hash_file(excluded_path, args.qm9_raw_excluded_txt_md5)
     gdb9_txt_excluded = excluded_path  # make alias so that it works with the copied code below
 
     """The following code is copy-pasted directly from `https://github.com/risilab/cormorant/blob/master/src/cormorant/data/prepare/qm9.py` lines 99--128. It makes sure we use the correct splits
@@ -248,11 +248,11 @@ def ensure_qm9_raw_thermo(parent_path: str):
     """
     thermo_path = path.join(parent_path, "thermo.json")
     
-    if Path(thermo_path).is_file() and hash_file(thermo_path) == args.qm9_raw_thermo_json_md5:
+    if Path(thermo_path).is_file() and check_hash_file(thermo_path, args.qm9_raw_thermo_json_md5):
         return
     
     atomref_path = path.join(parent_path, "atomref.txt")
-    if not (Path(atomref_path).is_file() and hash_file(atomref_path) == args.qm9_raw_atomref_txt_md5):
+    if not (Path(atomref_path).is_file() and check_hash_file(atomref_path, args.qm9_raw_atomref_txt_md5)):
         urlretrieve(url=args.qm9_atomref_url, filename=atomref_path, desc="Downloading atomref data")
         
     gdb9_txt_thermo = atomref_path  # alias so that we can work with the copied code below

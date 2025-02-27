@@ -6,6 +6,9 @@ import tarfile
 from tqdm import tqdm
 from urllib import request
 
+sys.path.append("..")
+from args import args
+
 def urlretrieve(url: str, filename: str, desc: str|None=None):
     """Downloads a file using urlretrieve, showing a progress bar and optional description
 
@@ -39,6 +42,34 @@ def tar_extractall(tar_path: str, extract_path: str, desc: str|None=None):
                 tar.extract(member, path=extract_path)
                 progress_bar.update(1) 
                 
+def check_hash_file(file_path: str, hash: str, hash_algo="md5"):
+    """check whether the hash of a file is equal to a given hash. If hash checking is disabled via argv, always returns true
+
+    Args:
+        file_path (str):
+        hash (str): 
+        hash_algo (str, optional): Defaults to "md5".
+    """
+    if not args.check_md5:
+        return True
+    
+    return hash_file(file_path, hash_algo) == hash
+
+def check_hash_directory(directory: str, hash: str, desc: str|None=None, hash_algo="md5"):
+    """Check the hash of a directory by hashing all files and combining their hashes, against a given hash string.
+
+    Args:
+        directory (str): _description_
+        hash (str): _description_
+        desc (str | None, optional): _description_. Defaults to None.
+        hash_algo (str, optional): _description_. Defaults to "md5".
+    """
+    
+    if not args.check_md5:
+        return True
+    
+    return hash_directory(directory, hash_algo, desc) == hash
+    
 
 def hash_file(file_path, hash_algo="md5"):
     """Compute the hash checksum of a file using a specified hashing algorithm."""

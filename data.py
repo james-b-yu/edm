@@ -10,7 +10,7 @@ from os import path
 from multiprocessing import cpu_count
 
 from args import args
-from utils.files import hash_file
+from utils.files import check_hash_file, hash_file
 from utils.qm9 import charge_to_idx, ensure_qm9_raw_data, ensure_qm9_raw_excluded, ensure_qm9_raw_splits, ensure_qm9_raw_thermo, ensure_qm9_processed
 
 @dataclass
@@ -92,7 +92,7 @@ class QM9Dataset(EDMDataset):
         
         processed_filename = f"{split}_{"h" if use_h else "no_h"}"
         self._processed_path = path.join(args.data_dir, "qm9", f"{processed_filename}.npz")
-        if not (Path(self._processed_path).is_file() and hash_file(self._processed_path) == getattr(args, f"qm9_{processed_filename}_npz_md5")):
+        if not (Path(self._processed_path).is_file() and check_hash_file(self._processed_path, getattr(args, f"qm9_{processed_filename}_npz_md5"))):
             ensure_qm9_processed(path.join(args.data_dir, "qm9"), use_h)
         
         self._data: QM9ProcessedData = {key: torch.from_numpy(val) for key, val in np.load(self._processed_path).items()}
