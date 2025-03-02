@@ -15,7 +15,7 @@ class Sampler():
 
 
         # if not given a schedule, create one
-        self.noise_schedule = noise_schedule if noise_schedule else self.default_noise_schedule()
+        # self.noise_schedule = noise_schedule if noise_schedule else self.default_noise_schedule()
 
         # alternative cosine noise
         self.noise_schedule = self._cosine_noise_schedule()
@@ -42,6 +42,8 @@ class Sampler():
     @torch.no_grad()
     def sample(self, num_atoms=10):
 
+        print("Samping Started")
+
         # Initialize random noise for coordinates, and for features with 5 possible atoms
         coords = torch.randn((num_atoms, 3), device=self.device)
         features = F.one_hot(torch.randint(0, 5, (num_atoms,)), num_classes=5).float().to(self.device)
@@ -62,6 +64,8 @@ class Sampler():
 
         # Reverse diffusion process
         for t in reversed(range(1, self.num_steps)):
+            print("t: " +str(t))
+            
             time_tensor = torch.tensor([t / self.num_steps], dtype=torch.float32, device=self.device)
 
             # Predict noise using the model
@@ -80,6 +84,8 @@ class Sampler():
             coords = (1 / alpha_t) * (coords - sigma_t * predicted_coords) + sigma_t * epsilon_x
             features = (1 / alpha_t) * (features - sigma_t * predicted_features) + sigma_t * epsilon_h
 
+        print("Sampling Finished")
+        
         return coords.cpu().numpy(), features.cpu().numpy()
     
 # Load trained model
