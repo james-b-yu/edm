@@ -37,44 +37,48 @@ class Sampler():
         t = torch.linspace(0, 1, self.num_steps, device=self.device)
         alpha_t = torch.cos((t + 0.008) / 1.008 * (torch.pi / 2)) ** 2
         sigma_t = torch.sqrt(1 - alpha_t**2)
-        return {"alpha": alpha_t, "sigma": sigma_t}
-
+        return {"alpha": alpha_t, "sigma": sigma_t}    
+    
     @torch.no_grad()
-    def sample(self, num_atoms=10, device="cuda"):
+    def sample(self, num_atoms=10):
 
-        # Initialize random noise: random 3D positions, random atom types
-
-        # Initialize random noise on GPU
+        # Initialize random noise for coordinates, and for features with 5 possible atoms
         coords = torch.randn((num_atoms, 3), device=self.device)
         features = F.one_hot(torch.randint(0, 5, (num_atoms,)), num_classes=5).float().to(self.device)
-        # features = torch.randn((num_atoms, features_d), device=self.device)  # Fix feature size
 
-
-        # Define molecular batch structure
+        # Define molecular graph structure
         n_nodes = torch.tensor([num_atoms], dtype=torch.int64, device=self.device)
         edges = torch.cartesian_prod(torch.arange(num_atoms, device=self.device), torch.arange(num_atoms, device=self.device))
         
-        # Placeholder for edge reduction
-        reduce_matrix = torch.eye(num_atoms, device=self.device)  
+        # reduce_matrix
+        num_edges = edges.shape[0]
+        reduce_matrix = torch.zeros((num_atoms, num_edges), device=self.device)
         
-        # Placeholder for centering
-        demean_matrix = torch.eye(num_atoms, device=self.device)  
+        for i in range(num_edges):
+            reduce_matrix[edges[i, 0], i] = 1.0
 
-        # Perform reverse diffusion with mixed precision
-        scaler = torch.cuda.amp.autocast()
+        # demean_matrix
+        demean_matrix = torch.eye(num_atoms, device=self.device) - (torch.ones((num_atoms, num_atoms), device=self.device) / num_atoms)
+
+        # Reverse diffusion process
         for t in reversed(range(1, self.num_steps)):
             time_tensor = torch.tensor([t / self.num_steps], dtype=torch.float32, device=self.device)
 
-            with torch.cuda.amp.autocast():  # Enable mixed precision for faster inference
-                predicted_coords, predicted_features = self.model(
-                    n_nodes, coords, features, edges, reduce_matrix, demean_matrix, time_tensor
-                )
+            # Predict noise using the model
+            predicted_coords, predicted_features = self.model(n_nodes, coords, features, edges, reduce_matrix, demean_matrix, time_tensor)
 
-            # Apply reverse diffusion update equation
+            # Get noise schedule values
             alpha_t = self.noise_schedule["alpha"][t]
             sigma_t = self.noise_schedule["sigma"][t]
-            coords = (1 / alpha_t) * (coords - sigma_t * predicted_coords)
-            features = (1 / alpha_t) * (features - sigma_t * predicted_features)
+
+            # Generate random noise and enforce zero center of gravity
+            epsilon_x = torch.randn_like(coords)
+            epsilon_x -= epsilon_x.mean(dim=0, keepdim=True)
+            epsilon_h = torch.randn_like(features)
+            
+            # Apply reverse diffusion update
+            coords = (1 / alpha_t) * (coords - sigma_t * predicted_coords) + sigma_t * epsilon_x
+            features = (1 / alpha_t) * (features - sigma_t * predicted_features) + sigma_t * epsilon_h
 
         return coords.cpu().numpy(), features.cpu().numpy()
     
