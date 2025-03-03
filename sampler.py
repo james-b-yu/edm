@@ -198,7 +198,7 @@ sampler = Sampler(model)
 try:
     generated_coords, generated_features = sampler.sample_masked(num_atoms=10, max_n_nodes=29)
 except Exception as e:
-    print(f"Error in sampling: {e}")
+    print(f"Error in masked sampling: {e}")
 
 # generated_coords, generated_features = sampler.sample(num_atoms=20)
 
