@@ -3,6 +3,8 @@ from model import EGNN,EGNNConfig  # Model
 from data import EDMDataloaderItem  # For handling molecule data
 import torch.nn.functional as F
 
+from noise_schedule import default_noise_schedule, cosine_noise_schedule
+
 class Sampler():
 
     def __init__(self, model, num_steps=1000, noise_schedule=None,device="cuda"):
@@ -18,26 +20,9 @@ class Sampler():
         # self.noise_schedule = noise_schedule if noise_schedule else self.default_noise_schedule()
 
         # alternative cosine noise
-        self.noise_schedule = self._cosine_noise_schedule()
+        self.noise_schedule = cosine_noise_schedule(num_steps,device)
 
-    # Creates a default noise schedule if not specified
-    def default_noise_schedule(self):
-        
-        t = torch.linspace(0, 1, self.num_steps)
-        
-        # schedule
-        alpha_t = torch.sqrt(1 - t**2) 
-        
-        # Noise
-        sigma_t = torch.sqrt(t**2) 
-        
-        return {"alpha": alpha_t, "sigma": sigma_t}
-    
-    def _cosine_noise_schedule(self):
-        t = torch.linspace(0, 1, self.num_steps, device=self.device)
-        alpha_t = torch.cos((t + 0.008) / 1.008 * (torch.pi / 2)) ** 2
-        sigma_t = torch.sqrt(1 - alpha_t**2)
-        return {"alpha": alpha_t, "sigma": sigma_t}    
+  
     
     @torch.no_grad()
     def sample(self, num_atoms=10):
