@@ -1,5 +1,6 @@
 """This file gives the argparser.
 """
+import torch
 
 import argparse
 parser = argparse.ArgumentParser(
@@ -12,6 +13,29 @@ Implementation of key parts of Hoogeboom, Satorras, Vignac and Welling's (2022) 
 Created by MLMI students David Gailey, Katherine Jackson, Stella Tsiapali and James Yu for the MLMI 4 (Advanced Machine Learning) course.
     """.strip()
 )
+
+def _validate_args(args: argparse.Namespace):
+    if args.pipeline == "evaluate" and args.checkpoint is None:
+        raise argparse.ArgumentTypeError("--checkpoint must be set if --pipeline=='evaluate'")
+
+parser.add_argument("--dataset", default="qm9", help="which dataset to train on, e.g. 'qm9', 'qm9_no_h'")
+    
+parser.add_argument("--num-steps", default=1000, type=int, help="number of diffusion steps")
+parser.add_argument("--batch-size", default=64, type=int, help="batch size")
+parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu", type=str, help="torch device to use")
+
+parser.add_argument("--hidden-d", default=256, type=int, help="EGNN hidden dimension")
+parser.add_argument("--num-layers", default=9, type=int, help="EGNN layers")
+
+parser.add_argument("--run-name", default="edm_run", type=str, help="the name of the run")
+parser.add_argument("--out-dir", default="./outputs", type=str, help="output will be contained in the folder <out_dir>/<run_name>")
+
+parser.add_argument("--extension", default=None, type=str, help="extension to use")
+parser.add_argument("--pipeline", default="train", type=str, help="pipeline", choices=["train", "evaluate"])
+parser.add_argument("--checkpoint", default=None, type=str, help="if specified, load checkpoint located in this folder")
+
+parser.add_argument("--start-epoch", default=0, type=int, help="train epochs in [start-epoch, end-epoch)")
+parser.add_argument("--end-epoch", default=1300, type=int, help="train epochs in [start-epoch, end-epoch)")
 
 parser.add_argument("--data-dir", default="./data", type=str, help="directory in which datasets are stored")
 parser.add_argument("--qm9-data-url", default="https://springernature.figshare.com/ndownloader/files/3195389", type=str, help="url from which to retrieve the raw xyz.tar.bz2 dataset")
@@ -35,3 +59,5 @@ parser.add_argument("--qm9-test-h-npz-md5", default="c6933531acc8f4153bc18149470
 parser.add_argument("--qm9-test-no-h-npz-md5", default="522e5f0fe4087e26c0713f723bead062", help="md5 hash of the processed qm9 test_no_h.npz file")
 
 args = parser.parse_args()
+
+_validate_args(args)

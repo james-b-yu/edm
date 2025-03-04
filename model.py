@@ -111,14 +111,17 @@ class EGNN(nn.Module):
 
         self.config = config
 
-    def forward(self, n_nodes: torch.Tensor, coords: torch.Tensor, features: torch.Tensor, edges: torch.Tensor, reduce: torch.Tensor, demean: torch.Tensor, time: float, node_attr: torch.Tensor|None=None, edge_attr: torch.Tensor|None=None):
+    def forward(self, n_nodes: torch.Tensor, coords: torch.Tensor, features: torch.Tensor, edges: torch.Tensor, reduce: torch.Tensor, demean: torch.Tensor, time: float | torch.Tensor, node_attr: torch.Tensor|None=None, edge_attr: torch.Tensor|None=None):
         x_e = coords[edges]  # [NN, 2, 3]
         d_e = (x_e[:, 0, :] - x_e[:, 1, :]).norm(dim=1).unsqueeze(dim=1) # [NN, 1]
 
         coords_out = coords
         features_out = features
         
-        node_attr_with_time     = torch.cat([time * torch.ones(size=(coords.shape[0], 1), dtype=coords.dtype, layout=coords.layout, device=coords.device)] + ([node_attr] if node_attr is not None else []), dim=-1)
+        if isinstance(time, float):
+            time = time * torch.ones(size=(coords.shape[0], 1), dtype=coords.dtype, layout=coords.layout, device=coords.device)
+        
+        node_attr_with_time     = torch.cat([time] + ([node_attr] if node_attr is not None else []), dim=-1)  # type:ignore
         edge_attr_with_distance = torch.cat([d_e ** 2] + ([edge_attr] if edge_attr is not None else []), dim=-1)
 
         for l, egcl in enumerate(self.egc_layers):

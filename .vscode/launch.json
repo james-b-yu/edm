@@ -5,6 +5,17 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "Debug Variance",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/run.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--extension",
+                "variance"
+            ]
+        },
+        {
             "name": "Debug PyTest",
             "type": "debugpy",
             "request": "launch",
