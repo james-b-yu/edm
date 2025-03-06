@@ -1,8 +1,7 @@
 import torch
 
 def collate_fn(batch):
-    """ Custom collate function to process batches of EDMDatasetItem. """
-    
+
     n_nodes = torch.tensor([item.n_nodes for item in batch], dtype=torch.int64)
     coords = torch.cat([item.coords for item in batch])
     features = torch.cat([item.features for item in batch])
@@ -19,7 +18,7 @@ def collate_fn(batch):
     
     edges = torch.cat(edges_list, dim=0)
 
-    # Fix: Correctly construct `reduce` to map nodes to edges (N, NN)
+    # construct `reduce` to map nodes to edges (N, NN)
     N = coords.shape[0]   # Total number of nodes
     NN = edges.shape[0]   # Total number of edges
 
@@ -34,14 +33,14 @@ def collate_fn(batch):
         demean = torch.eye(N_i) - (torch.ones((N_i, N_i)) / N_i)
         demean_list.append(demean)
 
-    demean = torch.block_diag(*demean_list)  # ✅ Ensures correct batching
+    demean = torch.block_diag(*demean_list)  
 
     return {
         "n_nodes": n_nodes,
         "coords": coords,
         "features": features,
-        "edges": edges,   # ✅ Dynamically computed
-        "reduce": reduce,  # ✅ Corrected shape (N, NN)
-        "demean": demean  # ✅ Included for centering
+        "edges": edges,   
+        "reduce": reduce,
+        "demean": demean  
     }
 
