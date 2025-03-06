@@ -2,6 +2,8 @@ import torch
 import torch.optim as optim
 import torch.nn.functional as F
 import time
+import os
+import numpy as np
 
 from model import EGNN, EGNNConfig
 from data import QM9Dataset, EDMDataloaderItem
@@ -9,16 +11,28 @@ from noise_schedule import default_noise_schedule
 from utility import collate_fn
 
 
-def train_edm(num_epochs=10, batch_size=64, learning_rate=1e-4, num_steps=1000, checkpoint_interval=1):
+def train_edm(num_epochs=10, batch_size=64, learning_rate=1e-4, num_steps=1000, checkpoint_interval=1,log_file="training_loss.txt"):
     
     # Set device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"[INFO] Using device: {device}")
 
-    # Load dataset
+    # Load full dataset
     dataset = QM9Dataset(use_h=True, split="train")
-    dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True, collate_fn=collate_fn)
-    print(f"[INFO] Dataset Loaded: {len(dataset)} molecules in training set.")
+
+    # Set seed for reproducibility
+    np.random.seed(42)
+    subset_indices = np.random.choice(len(dataset), int(0.1 * len(dataset)), replace=False)
+
+    # Create DataLoader with subset sampler
+    sampler = torch.utils.data.SubsetRandomSampler(subset_indices)
+    dataloader = torch.utils.data.DataLoader(dataset, batch_size=128, sampler=sampler, collate_fn=collate_fn, num_workers=4, pin_memory=True)
+
+    # Load dataset
+    # dataset = QM9Dataset(use_h=True, split="train")
+    # dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True, collate_fn=collate_fn, num_workers= 4, pin_memory=True)
+    
+    print(f"[INFO] Dataset Loaded: {len(sampler)} molecules in training set.")
 
     # Model configuration
     config = EGNNConfig(
@@ -36,9 +50,16 @@ def train_edm(num_epochs=10, batch_size=64, learning_rate=1e-4, num_steps=1000, 
 
     # Define noise scheduler
     noise_schedule = default_noise_schedule(num_steps, device)
+
+    # Create log file (if it doesn't exist)
+    if not os.path.exists(log_file):
+        with open(log_file, "w") as f:
+            f.write("Epoch, Loss, Time(s)\n")  # Write header
+    
     print("[INFO] Noise schedule created.")
 
     for epoch in range(num_epochs):
+
         model.train()
         total_loss = 0.0
         start_time = time.time()
@@ -106,8 +127,15 @@ def train_edm(num_epochs=10, batch_size=64, learning_rate=1e-4, num_steps=1000, 
             optimizer.step()
             total_loss += loss.item()
 
+            epoch_time = time.time() - start_time
+            avg_loss = total_loss / len(dataloader)
+
         epoch_time = time.time() - start_time
         print(f"[INFO] Epoch {epoch+1}/{num_epochs} completed. Loss: {total_loss/len(dataloader):.4f} (Time: {epoch_time:.2f}s)")
+
+        with open(log_file, "a") as f:
+            f.write(f"{epoch+1}, {avg_loss:.6f}, {epoch_time:.2f}\n")  # Save loss in file
+
 
         # Save model checkpoint periodically
         if (epoch + 1) % checkpoint_interval == 0:
@@ -119,7 +147,7 @@ def train_edm(num_epochs=10, batch_size=64, learning_rate=1e-4, num_steps=1000, 
     print("[INFO] Training complete. Model saved as trained_edm.pth")
 
 
-def validate_edm(batch_size=32, num_steps=1000):
+def validate_edm(batch_size=64, num_steps=1000):
     
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
@@ -165,6 +193,6 @@ def validate_edm(batch_size=32, num_steps=1000):
 
 if __name__ == "__main__":
     print("[INFO] Starting Training")
-    train_edm(num_epochs=2, batch_size=64, learning_rate=1e-5, num_steps=1000)
+    train_edm(num_epochs=10, batch_size=64, learning_rate=1e-4, num_steps=1000)
     print("[INFO] Starting Validation")
     validate_edm()
