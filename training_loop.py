@@ -1,8 +1,7 @@
 import torch
 import torch.optim as optim
 import torch.nn.functional as F
-import pytest
-import time  # Track time
+import time
 
 from model import EGNN, EGNNConfig
 from data import QM9Dataset, EDMDataloaderItem
@@ -11,7 +10,6 @@ from utility import collate_fn
 
 
 def train_edm(num_epochs=10, batch_size=64, learning_rate=1e-4, num_steps=1000, checkpoint_interval=1):
-    """Train the Equivariant Diffusion Model (EDM) with EGNN and Debugging Info"""
     
     # Set device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -122,7 +120,6 @@ def train_edm(num_epochs=10, batch_size=64, learning_rate=1e-4, num_steps=1000, 
 
 
 def validate_edm(batch_size=32, num_steps=1000):
-    """Validate EDM model by checking if outputs are consistent"""
     
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
@@ -168,6 +165,6 @@ def validate_edm(batch_size=32, num_steps=1000):
 
 if __name__ == "__main__":
     print("[INFO] Starting Training")
-    train_edm(num_epochs=2, batch_size=32, learning_rate=0.001, num_steps=1000)
+    train_edm(num_epochs=2, batch_size=64, learning_rate=1e-5, num_steps=1000)
     print("[INFO] Starting Validation")
     validate_edm()
