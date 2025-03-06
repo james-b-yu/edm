@@ -8,7 +8,8 @@ import numpy as np
 from model import EGNN, EGNNConfig
 from data import QM9Dataset, EDMDataloaderItem
 from noise_schedule import default_noise_schedule
-from utility import collate_fn
+from utility import collate_fn, gradient_clipping, random_rotation
+from losses import compute_loss_and_nll, compute_loss
 
 
 def train_edm(num_epochs=10, batch_size=64, learning_rate=1e-4, num_steps=1000, checkpoint_interval=1,log_file="training_loss.txt"):
@@ -26,7 +27,7 @@ def train_edm(num_epochs=10, batch_size=64, learning_rate=1e-4, num_steps=1000, 
 
     # Create DataLoader with subset sampler
     sampler = torch.utils.data.SubsetRandomSampler(subset_indices)
-    dataloader = torch.utils.data.DataLoader(dataset, batch_size=128, sampler=sampler, collate_fn=collate_fn, num_workers=4, pin_memory=True)
+    dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, sampler=sampler, collate_fn=collate_fn, num_workers=4, pin_memory=True)
 
     # Load dataset
     # dataset = QM9Dataset(use_h=True, split="train")
@@ -46,10 +47,16 @@ def train_edm(num_epochs=10, batch_size=64, learning_rate=1e-4, num_steps=1000, 
     # Initialize model
     model = EGNN(config).to(device)
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
-    criterion = torch.nn.MSELoss()
+    # criterion = torch.nn.MSELoss()
+
+    # Learning Rate Scheduler
+    scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=10, gamma=0.5)  
 
     # Define noise scheduler
     noise_schedule = default_noise_schedule(num_steps, device)
+
+    gradnorm_queue = torch.tensor([], dtype=torch.float32, device=device)
+
 
     # Create log file (if it doesn't exist)
     if not os.path.exists(log_file):
@@ -71,6 +78,8 @@ def train_edm(num_epochs=10, batch_size=64, learning_rate=1e-4, num_steps=1000, 
             
             # Move batch data to device
             batch = {key: val.to(device) for key, val in batch.items() if isinstance(val, torch.Tensor)}
+
+            batch["coords"] = random_rotation(batch["coords"], batch["n_nodes"]).detach()            
             
             # Debug tensor shapes
             if batch_idx == 0:
@@ -78,38 +87,49 @@ def train_edm(num_epochs=10, batch_size=64, learning_rate=1e-4, num_steps=1000, 
                 for key, val in batch.items():
                     print(f"  {key}: {val.shape}")
 
-            # Sample random timestep
-            t = torch.randint(1, num_steps, (batch["n_nodes"].shape[0],), device=device)
-            time_tensor = t / num_steps  
+            # # Sample random timestep
+            # t = torch.randint(1, num_steps, (batch["n_nodes"].shape[0],), device=device)
+            # time_tensor = t / num_steps  
             
-            num_atoms_total = batch["coords"].shape[0]  
-            time_expanded = time_tensor.repeat_interleave(batch["n_nodes"]).reshape(num_atoms_total, 1)
+            # num_atoms_total = batch["coords"].shape[0]  
+            # time_expanded = time_tensor.repeat_interleave(batch["n_nodes"]).reshape(num_atoms_total, 1)
 
-            # Retrieve noise scaling factors
-            alpha_t = noise_schedule["alpha"][t].unsqueeze(-1)  
-            sigma_t = noise_schedule["sigma"][t].unsqueeze(-1)  
+            # # Retrieve noise scaling factors
+            # alpha_t = noise_schedule["alpha"][t].unsqueeze(-1)  
+            # sigma_t = noise_schedule["sigma"][t].unsqueeze(-1)  
 
-            alpha_t_expanded = alpha_t.repeat_interleave(batch["n_nodes"], dim=0).reshape(num_atoms_total, 1)
-            sigma_t_expanded = sigma_t.repeat_interleave(batch["n_nodes"], dim=0).reshape(num_atoms_total, 1)
+            # alpha_t_expanded = alpha_t.repeat_interleave(batch["n_nodes"], dim=0).reshape(num_atoms_total, 1)
+            # sigma_t_expanded = sigma_t.repeat_interleave(batch["n_nodes"], dim=0).reshape(num_atoms_total, 1)
 
-            # Generate noise
-            noise_coords = torch.randn_like(batch["coords"], dtype=torch.float32)
-            noise_features = torch.randn_like(batch["features"], dtype=torch.float32)
+            # # Generate noise
+            # noise_coords = torch.randn_like(batch["coords"], dtype=torch.float32)
+            # noise_features = torch.randn_like(batch["features"], dtype=torch.float32)
 
-            # Apply diffusion process
-            zt_coords = alpha_t_expanded * batch["coords"] + sigma_t_expanded * noise_coords
-            zt_features = alpha_t_expanded * batch["features"] + sigma_t_expanded * noise_features
+            # # Apply diffusion process
+            # zt_coords = alpha_t_expanded * batch["coords"] + sigma_t_expanded * noise_coords
+            # zt_features = alpha_t_expanded * batch["features"] + sigma_t_expanded * noise_features
 
-            # Predict noise using the model
-            predicted_coords, predicted_features = model(
-                batch["n_nodes"], zt_coords, zt_features, batch["edges"], 
-                batch["reduce"], batch["demean"], time_expanded
-            )
+            # # Predict noise using the model
+            # predicted_coords, predicted_features = model(
+            #     batch["n_nodes"], zt_coords, zt_features, batch["edges"], 
+            #     batch["reduce"], batch["demean"], time_expanded
+            # )
 
-            # Compute loss (normalized)
-            loss_coords = criterion(predicted_coords, noise_coords) / batch["coords"].shape[0]
-            loss_features = criterion(predicted_features, noise_features) / batch["features"].shape[0]
-            loss = loss_coords + loss_features
+            # # Compute loss (normalized)
+            # loss_coords = criterion(predicted_coords, noise_coords) / batch["coords"].shape[0]
+            # loss_features = criterion(predicted_features, noise_features) / batch["features"].shape[0]
+            # loss = loss_coords + loss_features
+
+            # # Compute Loss using paper's function
+            # nll, reg_term, mean_abs_z = compute_loss_and_nll(
+            #     model, zt_coords, zt_features, batch["n_nodes"], batch["edges"], time_expanded
+            # )
+
+            # loss = nll + 0.01 * reg_term
+
+            # Compute loss
+            loss, loss_coords, loss_features = compute_loss(model, batch, noise_schedule)
+
 
             # Debugging loss values
             if batch_idx % 10 == 0:
@@ -117,6 +137,8 @@ def train_edm(num_epochs=10, batch_size=64, learning_rate=1e-4, num_steps=1000, 
 
             # Backpropagation
             loss.backward()
+            # Apply gradient clipping
+            grad_norm, gradnorm_queue = gradient_clipping(model, gradnorm_queue)
 
             # Debugging gradients
             if batch_idx % 50 == 0:
@@ -129,6 +151,9 @@ def train_edm(num_epochs=10, batch_size=64, learning_rate=1e-4, num_steps=1000, 
 
             epoch_time = time.time() - start_time
             avg_loss = total_loss / len(dataloader)
+
+        # update learning rate
+        scheduler.step()
 
         epoch_time = time.time() - start_time
         print(f"[INFO] Epoch {epoch+1}/{num_epochs} completed. Loss: {total_loss/len(dataloader):.4f} (Time: {epoch_time:.2f}s)")

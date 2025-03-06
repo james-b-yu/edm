@@ -1,4 +1,5 @@
 import torch
+import numpy as np
 
 def collate_fn(batch):
 
@@ -44,85 +45,117 @@ def collate_fn(batch):
         "demean": demean  
     }
 
+import torch
 
+def gradient_clipping(model, gradnorm_queue, default_clip=1.0):
+    """
+    Clips gradients based on recent gradient norms to prevent instability.
+    
+    Args:
+        model (torch.nn.Module): The neural network model.
+        gradnorm_queue (torch.Tensor): Stores recent gradient norms for adaptive clipping.
+        default_clip (float): Default gradient clipping threshold if history is unavailable.
 
-def gradient_clipping(flow, gradnorm_queue):
-    # Allow gradient norm to be 150% + 2 * stdev of the recent history.
-    max_grad_norm = 1.5 * gradnorm_queue.mean() + 2 * gradnorm_queue.std()
+    Returns:
+        float: The final computed gradient norm.
+    """
 
-    # Clips gradient and returns the norm
-    grad_norm = torch.nn.utils.clip_grad_norm_(
-        flow.parameters(), max_norm=max_grad_norm, norm_type=2.0)
+    device = gradnorm_queue.device  # Ensure new tensors match device
 
-    if float(grad_norm) > max_grad_norm:
-        gradnorm_queue.add(float(max_grad_norm))
+    # Prevent std() issue by ensuring at least 2 values exist
+    if gradnorm_queue.numel() < 2:
+        max_grad_norm = torch.tensor(default_clip, device=device)  # Use default if not enough history
     else:
-        gradnorm_queue.add(float(grad_norm))
+        mean_grad = gradnorm_queue.mean().item()
+        std_grad = gradnorm_queue.std().item()
+        max_grad_norm = torch.tensor(1.5 * mean_grad + 2 * std_grad, device=device)
 
-    # if float(grad_norm) > max_grad_norm:
-    #     print(f'Clipped gradient with value {grad_norm:.1f} '
-    #           f'while allowed {max_grad_norm:.1f}')
-    return grad_norm
+    # Clip gradients and return the norm
+    grad_norm = torch.nn.utils.clip_grad_norm_(
+        model.parameters(), max_norm=max_grad_norm.item(), norm_type=2.0
+    )
+
+    # Ensure grad_norm is also on the correct device
+    grad_norm_tensor = torch.tensor([grad_norm], device=device)
+
+    # Update gradnorm_queue with latest gradient norm
+    gradnorm_queue = torch.cat([gradnorm_queue, grad_norm_tensor])
+
+    # Keep queue size reasonable (e.g., last 100 values)
+    if gradnorm_queue.numel() > 100:
+        gradnorm_queue = gradnorm_queue[-100:]
+
+    return grad_norm, gradnorm_queue 
+
+
+
 
 
 # Rotation data augmntation
-def random_rotation(x):
-    bs, n_nodes, n_dims = x.size()
+def random_rotation(x, n_nodes):
+    """
+    Apply a random 3D rotation to molecular coordinates.
+    
+    Args:
+        x (torch.Tensor): Coordinates tensor of shape (num_atoms, 3).
+        n_nodes (torch.Tensor): Number of nodes (atoms) per molecule.
+
+    Returns:
+        torch.Tensor: Rotated coordinates with the same shape as input.
+    """
     device = x.device
     angle_range = np.pi * 2
-    if n_dims == 2:
-        theta = torch.rand(bs, 1, 1).to(device) * angle_range - np.pi
-        cos_theta = torch.cos(theta)
-        sin_theta = torch.sin(theta)
-        R_row0 = torch.cat([cos_theta, -sin_theta], dim=2)
-        R_row1 = torch.cat([sin_theta, cos_theta], dim=2)
-        R = torch.cat([R_row0, R_row1], dim=1)
+    rotated_coords = []
 
-        x = x.transpose(1, 2)
-        x = torch.matmul(R, x)
-        x = x.transpose(1, 2)
+    # Iterate over molecules
+    split_coords = torch.split(x, n_nodes.tolist())  # Split coordinates per molecule
+    for molecule_coords in split_coords:
+        num_atoms = molecule_coords.shape[0]  # Number of atoms in the molecule
+        
+        if num_atoms == 0:  # Skip empty molecules (unlikely, but for safety)
+            rotated_coords.append(molecule_coords)
+            continue
 
-    elif n_dims == 3:
+        molecule_coords = molecule_coords.unsqueeze(0)  # Shape: (1, num_atoms, 3)
 
         # Build Rx
-        Rx = torch.eye(3).unsqueeze(0).repeat(bs, 1, 1).to(device)
-        theta = torch.rand(bs, 1, 1).to(device) * angle_range - np.pi
+        Rx = torch.eye(3, device=device).unsqueeze(0)
+        theta = torch.rand(1, 1, device=device) * angle_range - np.pi
         cos = torch.cos(theta)
         sin = torch.sin(theta)
-        Rx[:, 1:2, 1:2] = cos
-        Rx[:, 1:2, 2:3] = sin
-        Rx[:, 2:3, 1:2] = - sin
-        Rx[:, 2:3, 2:3] = cos
+        Rx[:, 1, 1] = cos
+        Rx[:, 1, 2] = sin
+        Rx[:, 2, 1] = -sin
+        Rx[:, 2, 2] = cos
 
         # Build Ry
-        Ry = torch.eye(3).unsqueeze(0).repeat(bs, 1, 1).to(device)
-        theta = torch.rand(bs, 1, 1).to(device) * angle_range - np.pi
+        Ry = torch.eye(3, device=device).unsqueeze(0)
+        theta = torch.rand(1, 1, device=device) * angle_range - np.pi
         cos = torch.cos(theta)
         sin = torch.sin(theta)
-        Ry[:, 0:1, 0:1] = cos
-        Ry[:, 0:1, 2:3] = -sin
-        Ry[:, 2:3, 0:1] = sin
-        Ry[:, 2:3, 2:3] = cos
+        Ry[:, 0, 0] = cos
+        Ry[:, 0, 2] = -sin
+        Ry[:, 2, 0] = sin
+        Ry[:, 2, 2] = cos
 
         # Build Rz
-        Rz = torch.eye(3).unsqueeze(0).repeat(bs, 1, 1).to(device)
-        theta = torch.rand(bs, 1, 1).to(device) * angle_range - np.pi
+        Rz = torch.eye(3, device=device).unsqueeze(0)
+        theta = torch.rand(1, 1, device=device) * angle_range - np.pi
         cos = torch.cos(theta)
         sin = torch.sin(theta)
-        Rz[:, 0:1, 0:1] = cos
-        Rz[:, 0:1, 1:2] = sin
-        Rz[:, 1:2, 0:1] = -sin
-        Rz[:, 1:2, 1:2] = cos
+        Rz[:, 0, 0] = cos
+        Rz[:, 0, 1] = sin
+        Rz[:, 1, 0] = -sin
+        Rz[:, 1, 1] = cos
 
-        x = x.transpose(1, 2)
-        x = torch.matmul(Rx, x)
-        #x = torch.matmul(Rx.transpose(1, 2), x)
-        x = torch.matmul(Ry, x)
-        #x = torch.matmul(Ry.transpose(1, 2), x)
-        x = torch.matmul(Rz, x)
-        #x = torch.matmul(Rz.transpose(1, 2), x)
-        x = x.transpose(1, 2)
-    else:
-        raise Exception("Not implemented Error")
+        # Apply rotations
+        molecule_coords = molecule_coords.transpose(1, 2)  # Shape: (1, 3, num_atoms)
+        molecule_coords = torch.matmul(Rx, molecule_coords)
+        molecule_coords = torch.matmul(Ry, molecule_coords)
+        molecule_coords = torch.matmul(Rz, molecule_coords)
+        molecule_coords = molecule_coords.transpose(1, 2).squeeze(0)  # Back to (num_atoms, 3)
 
-    return x.contiguous()
+        rotated_coords.append(molecule_coords)
+
+    # Recombine rotated molecules
+    return torch.cat(rotated_coords, dim=0).contiguous()
