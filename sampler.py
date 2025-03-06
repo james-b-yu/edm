@@ -21,6 +21,7 @@ class Sampler():
 
         # alternative cosine noise
         self.noise_schedule = cosine_noise_schedule(num_steps,device)
+        # self.noise_schedule = default_noise_schedule(num_steps,device)
 
   
     
@@ -63,8 +64,8 @@ class Sampler():
             predicted_coords, predicted_features = self.model(n_nodes, coords, features, edges, reduce_matrix, demean_matrix, time_tensor)
 
             # Get noise schedule values
-            alpha_t = self.noise_schedule["alpha"][t]
-            sigma_t = self.noise_schedule["sigma"][t]
+            alpha_t = torch.clamp(self.noise_schedule["alpha"][t], min=1e-5)
+            sigma_t = torch.clamp(self.noise_schedule["sigma"][t], min=1e-5)
 
             # Generate random noise and enforce zero center of gravity
             epsilon_x = torch.randn_like(coords)
@@ -72,8 +73,15 @@ class Sampler():
             epsilon_h = torch.randn_like(features)
             
             # Apply reverse diffusion update
-            coords = (1 / alpha_t) * (coords - sigma_t * predicted_coords) + sigma_t * epsilon_x
-            features = (1 / alpha_t) * (features - sigma_t * predicted_features) + sigma_t * epsilon_h
+
+            eps = 1e-7  # Small constant to prevent division by very small numbers
+            coords = (1 / (alpha_t)) * (coords - sigma_t * predicted_coords) + sigma_t * epsilon_x
+            features = (1 / (alpha_t)) * (features - sigma_t * predicted_features) + sigma_t * epsilon_h
+            features = F.one_hot(features.argmax(dim=-1), num_classes=5).float()
+
+
+            # coords = (1 / alpha_t) * (coords - sigma_t * predicted_coords) + sigma_t * epsilon_x
+            # features = (1 / alpha_t) * (features - sigma_t * predicted_features) + sigma_t * epsilon_h
 
         print("Sampling Finished")
         
@@ -143,6 +151,7 @@ class Sampler():
             # Apply reverse diffusion update (only real atoms)
             coords = (1 / alpha_t) * (coords - sigma_t * predicted_coords) + sigma_t * epsilon_x
             features = (1 / alpha_t) * (features - sigma_t * predicted_features) + sigma_t * epsilon_h
+            
 
             # Ensure padding atoms remain zero
             # Expand for 3D coords
@@ -175,19 +184,24 @@ dummy_config = EGNNConfig(
 model = EGNN(dummy_config)
 
 model.to(device)
+
+# Load trained weights
+model.load_state_dict(torch.load("checkpoint_epoch_44.pth", map_location=device))
+
 model.eval()
 
 # Sample a new molecule
-sampler = Sampler(model)
+sampler = Sampler(model,num_steps = 4)
 
-try:
-    generated_coords, generated_features = sampler.sample_masked(num_atoms=10, max_n_nodes=29)
-except Exception as e:
-    print(f"Error in masked sampling: {e}")
+# try:
+    # generated_coords, generated_features = sampler.sample_masked(num_atoms=10, max_n_nodes=29)
+# except Exception as e:
+#     print(f"Error in masked sampling: {e}")
 
-# generated_coords, generated_features = sampler.sample(num_atoms=20)
+generated_coords, generated_features = sampler.sample(num_atoms=2)
 
 
 # Save or visualize the result
 print("Generated Coordinates:", generated_coords)
 print("Generated Features:", generated_features)
+print("Center of Gravity:", generated_coords.mean(axis=0))

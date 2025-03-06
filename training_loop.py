@@ -137,6 +137,7 @@ def train_edm(num_epochs=10, batch_size=64, learning_rate=1e-4, num_steps=1000, 
 
             # Backpropagation
             loss.backward()
+            
             # Apply gradient clipping
             grad_norm, gradnorm_queue = gradient_clipping(model, gradnorm_queue)
 
@@ -218,6 +219,6 @@ def validate_edm(batch_size=64, num_steps=1000):
 
 if __name__ == "__main__":
     print("[INFO] Starting Training")
-    train_edm(num_epochs=10, batch_size=64, learning_rate=1e-4, num_steps=1000)
+    train_edm(num_epochs=75, batch_size=64, learning_rate=1e-4, num_steps=1000)
     print("[INFO] Starting Validation")
     validate_edm()

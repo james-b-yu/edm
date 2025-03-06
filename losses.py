@@ -74,6 +74,9 @@ def compute_loss(model, batch, noise_schedule):
     alpha_t = noise_schedule["alpha"][t].unsqueeze(-1)  # (batch_size, 1)
     sigma_t = noise_schedule["sigma"][t].unsqueeze(-1)  # (batch_size, 1)
 
+    alpha_t = torch.clamp(alpha_t, min=1e-5, max=1.0)
+    sigma_t = torch.clamp(sigma_t, min=1e-5, max=1.0)
+
     # Expand scaling factors for all atoms in the batch
     alpha_t_expanded = alpha_t.repeat_interleave(batch["n_nodes"], dim=0).reshape(num_atoms_total, 1)
     sigma_t_expanded = sigma_t.repeat_interleave(batch["n_nodes"], dim=0).reshape(num_atoms_total, 1)
