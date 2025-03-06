@@ -1,96 +1,173 @@
 import torch
 import torch.optim as optim
 import torch.nn.functional as F
+import pytest
+import time  # Track time
 
-from model import EGNN, EGNNConfig  # Import the model
-from data import QM9Dataset, EDMDataloaderItem  # Import dataset
+from model import EGNN, EGNNConfig
+from data import QM9Dataset, EDMDataloaderItem
 from noise_schedule import default_noise_schedule
 from utility import collate_fn
 
-# Set device
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-# Load dataset
-dataset = QM9Dataset(use_h=True, split="train")
-dataloader = torch.utils.data.DataLoader(dataset, batch_size=64, shuffle=True, collate_fn=collate_fn)
-
-# Model configuration
-config = EGNNConfig(
-    features_d=5,      # Number of atom types
-    node_attr_d=0,     # Additional node attributes
-    edge_attr_d=0,     # Additional edge attributes
-    hidden_d=256,      # Hidden layer size
-    num_layers=9       # Number of EGNN layers
-)
-
-# Initialize model
-model = EGNN(config).to(device)
-optimizer = optim.Adam(model.parameters(), lr=1e-4)
-criterion = torch.nn.MSELoss()
-
-# Define noise scheduler
-num_steps = 1000 
-noise_schedule  = default_noise_schedule(num_steps, device)
-
-# Training settings
-num_epochs = 10  # Increase training epochs
-checkpoint_interval = 2  # Save every 2 epochs
-
-for epoch in range(num_epochs):
-    model.train()
-    total_loss = 0.0
+def train_edm(num_epochs=10, batch_size=64, learning_rate=1e-4, num_steps=1000, checkpoint_interval=1):
+    """Train the Equivariant Diffusion Model (EDM) with EGNN and Debugging Info"""
     
-    for batch in dataloader:
-        optimizer.zero_grad()
+    # Set device
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print(f"[INFO] Using device: {device}")
+
+    # Load dataset
+    dataset = QM9Dataset(use_h=True, split="train")
+    dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, shuffle=True, collate_fn=collate_fn)
+    print(f"[INFO] Dataset Loaded: {len(dataset)} molecules in training set.")
+
+    # Model configuration
+    config = EGNNConfig(
+        features_d=5,  
+        node_attr_d=0,  
+        edge_attr_d=0,  
+        hidden_d=256,   
+        num_layers=9    
+    )
+
+    # Initialize model
+    model = EGNN(config).to(device)
+    optimizer = optim.Adam(model.parameters(), lr=learning_rate)
+    criterion = torch.nn.MSELoss()
+
+    # Define noise scheduler
+    noise_schedule = default_noise_schedule(num_steps, device)
+    print("[INFO] Noise schedule created.")
+
+    for epoch in range(num_epochs):
+        model.train()
+        total_loss = 0.0
+        start_time = time.time()
+
+        print(f"\n[INFO] Epoch {epoch+1}/{num_epochs} started...")
         
-        # Ensure batch data is moved to device
-        batch = {key: val.to(device) for key, val in batch.items() if isinstance(val, torch.Tensor)}
+        for batch_idx, batch in enumerate(dataloader):
+            optimizer.zero_grad()
+            
+            # Move batch data to device
+            batch = {key: val.to(device) for key, val in batch.items() if isinstance(val, torch.Tensor)}
+            
+            # Debug tensor shapes
+            if batch_idx == 0:
+                print(f"[DEBUG] Batch {batch_idx} tensor shapes:")
+                for key, val in batch.items():
+                    print(f"  {key}: {val.shape}")
 
-        # Sample a random timestep
-        t = torch.randint(1, num_steps, (batch["n_nodes"].shape[0],), device=device)
-        time_tensor = t / num_steps  # Normalize time
+            # Sample random timestep
+            t = torch.randint(1, num_steps, (batch["n_nodes"].shape[0],), device=device)
+            time_tensor = t / num_steps  
+            
+            num_atoms_total = batch["coords"].shape[0]  
+            time_expanded = time_tensor.repeat_interleave(batch["n_nodes"]).reshape(num_atoms_total, 1)
 
-        # Retrieve noise scaling factors
-        alpha_t = noise_schedule["alpha"][t].unsqueeze(-1)  # (64, 1)
-        sigma_t = noise_schedule["sigma"][t].unsqueeze(-1)  # (64, 1)
+            # Retrieve noise scaling factors
+            alpha_t = noise_schedule["alpha"][t].unsqueeze(-1)  
+            sigma_t = noise_schedule["sigma"][t].unsqueeze(-1)  
 
-        # Expand scaling factors for all atoms in the batch
-        num_atoms_total = batch["coords"].shape[0]  # Sum of atoms across all molecules
-        alpha_t_expanded = alpha_t.repeat_interleave(batch["n_nodes"], dim=0).reshape(num_atoms_total, 1)
-        sigma_t_expanded = sigma_t.repeat_interleave(batch["n_nodes"], dim=0).reshape(num_atoms_total, 1)
+            alpha_t_expanded = alpha_t.repeat_interleave(batch["n_nodes"], dim=0).reshape(num_atoms_total, 1)
+            sigma_t_expanded = sigma_t.repeat_interleave(batch["n_nodes"], dim=0).reshape(num_atoms_total, 1)
 
-        # Generate noise
-        noise_coords = torch.randn_like(batch["coords"])
-        noise_features = torch.randn_like(batch["features"])
+            # Generate noise
+            noise_coords = torch.randn_like(batch["coords"], dtype=torch.float32)
+            noise_features = torch.randn_like(batch["features"], dtype=torch.float32)
 
-        # Apply diffusion process
-        zt_coords = alpha_t_expanded * batch["coords"] + sigma_t_expanded * noise_coords
-        zt_features = alpha_t_expanded * batch["features"] + sigma_t_expanded * noise_features
+            # Apply diffusion process
+            zt_coords = alpha_t_expanded * batch["coords"] + sigma_t_expanded * noise_coords
+            zt_features = alpha_t_expanded * batch["features"] + sigma_t_expanded * noise_features
 
-        # Predict noise using the model
-        predicted_coords, predicted_features = model(
-            batch["n_nodes"], zt_coords, zt_features, batch["edges"], 
-            batch["reduce"], batch["demean"], time_tensor
-        )
+            # Predict noise using the model
+            predicted_coords, predicted_features = model(
+                batch["n_nodes"], zt_coords, zt_features, batch["edges"], 
+                batch["reduce"], batch["demean"], time_expanded
+            )
 
-        # Compute loss
-        loss_coords = criterion(predicted_coords, noise_coords)
-        loss_features = criterion(predicted_features, noise_features)
-        loss = loss_coords + loss_features
+            # Compute loss (normalized)
+            loss_coords = criterion(predicted_coords, noise_coords) / batch["coords"].shape[0]
+            loss_features = criterion(predicted_features, noise_features) / batch["features"].shape[0]
+            loss = loss_coords + loss_features
 
-        # Backpropagation
-        loss.backward()
-        optimizer.step()
+            # Debugging loss values
+            if batch_idx % 10 == 0:
+                print(f"[DEBUG] Batch {batch_idx}: Loss = {loss.item():.6f}")
 
-        total_loss += loss.item()
+            # Backpropagation
+            loss.backward()
 
-    # Print epoch loss
-    print(f"Epoch {epoch+1}/{num_epochs}, Loss: {total_loss/len(dataloader):.4f}")
+            # Debugging gradients
+            if batch_idx % 50 == 0:
+                for name, param in model.named_parameters():
+                    if param.grad is not None:
+                        print(f"[DEBUG] Gradients in {name}: Mean={param.grad.mean().item():.6f}")
 
-    # Save model checkpoint periodically
-    if (epoch + 1) % checkpoint_interval == 0:
-        torch.save(model.state_dict(), f"checkpoint_epoch_{epoch+1}.pth")
+            optimizer.step()
+            total_loss += loss.item()
 
-# Final model save
-torch.save(model.state_dict(), "trained_edm.pth")
-print("Training complete. Model saved.")
+        epoch_time = time.time() - start_time
+        print(f"[INFO] Epoch {epoch+1}/{num_epochs} completed. Loss: {total_loss/len(dataloader):.4f} (Time: {epoch_time:.2f}s)")
+
+        # Save model checkpoint periodically
+        if (epoch + 1) % checkpoint_interval == 0:
+            torch.save(model.state_dict(), f"checkpoint_epoch_{epoch+1}.pth")
+            print(f"[INFO] Checkpoint saved: checkpoint_epoch_{epoch+1}.pth")
+
+    # Final model save
+    torch.save(model.state_dict(), "trained_edm.pth")
+    print("[INFO] Training complete. Model saved as trained_edm.pth")
+
+
+def validate_edm(batch_size=32, num_steps=1000):
+    """Validate EDM model by checking if outputs are consistent"""
+    
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    
+    # Load dataset (use validation set)
+    dataset = QM9Dataset(use_h=True, split="valid")
+    dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, collate_fn=collate_fn)
+
+    # Load trained model
+    config = EGNNConfig(features_d=5, node_attr_d=0, edge_attr_d=0, hidden_d=256, num_layers=9)
+    model = EGNN(config).to(device)
+    model.load_state_dict(torch.load("trained_edm.pth"))
+    model.eval()  # Set model to eval mode
+
+    noise_schedule = default_noise_schedule(num_steps, device)
+
+    total_loss = 0.0
+    with torch.no_grad():
+        for batch_idx, batch in enumerate(dataloader):
+            batch = {key: val.to(device) for key, val in batch.items() if isinstance(val, torch.Tensor)}
+
+            t = torch.randint(1, num_steps, (batch["n_nodes"].shape[0],), device=device)
+            time_tensor = t / num_steps
+            num_atoms_total = batch["coords"].shape[0]
+            time_expanded = time_tensor.repeat_interleave(batch["n_nodes"]).reshape(num_atoms_total, 1)
+
+            # Predict noise using model
+            predicted_coords, predicted_features = model(
+                batch["n_nodes"], batch["coords"], batch["features"], batch["edges"],
+                batch["reduce"], batch["demean"], time_expanded
+            )
+
+            # Compute validation loss
+            loss_coords = F.mse_loss(predicted_coords, batch["coords"])
+            loss_features = F.mse_loss(predicted_features, batch["features"])
+            loss = loss_coords + loss_features
+            total_loss += loss.item()
+
+            if batch_idx % 5 == 0:
+                print(f"[INFO] Validation Batch {batch_idx}: Loss = {loss.item():.6f}")
+
+    print(f"[INFO] Validation Loss: {total_loss/len(dataloader):.4f}")
+
+
+if __name__ == "__main__":
+    print("[INFO] Starting Training")
+    train_edm(num_epochs=2, batch_size=32, learning_rate=0.001, num_steps=1000)
+    print("[INFO] Starting Validation")
+    validate_edm()
