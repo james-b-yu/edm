@@ -16,6 +16,6 @@ def cosine_noise_schedule(num_steps, device):
     alpha_t = torch.clamp(alpha_t, min=1e-2)  # Ensuring minimum value
 
     # Ensure stability in sigma calculation
-    sigma_t = torch.sqrt(torch.clamp(1 - alpha_t**2, min=1e-7))  
+    sigma_t = torch.sqrt(torch.clamp(1 - alpha_t**2, min=1e-5))  
 
     return {"alpha": alpha_t.to(device), "sigma": sigma_t.to(device)}

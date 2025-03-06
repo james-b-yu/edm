@@ -71,9 +71,17 @@ def gradient_clipping(model, gradnorm_queue, default_clip=1.0):
         max_grad_norm = torch.tensor(1.5 * mean_grad + 2 * std_grad, device=device)
 
     # Clip gradients and return the norm
-    grad_norm = torch.nn.utils.clip_grad_norm_(
-        model.parameters(), max_norm=max_grad_norm.item(), norm_type=2.0
-    )
+    # grad_norm = torch.nn.utils.clip_grad_norm_(
+    #     model.parameters(), max_norm=max_grad_norm.item(), norm_type=2.0
+    # )
+
+    grad_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+
+    for name, param in model.named_parameters():
+        if param.grad is not None and torch.isnan(param.grad).any():
+            print(f"[ERROR] NaN detected in gradients of {name}")
+
+
 
     # Ensure grad_norm is also on the correct device
     grad_norm_tensor = torch.tensor([grad_norm], device=device)

@@ -3,6 +3,7 @@ import torch.optim as optim
 import torch.nn.functional as F
 import time
 import os
+import sys
 import numpy as np
 
 from model import EGNN, EGNNConfig
@@ -12,7 +13,7 @@ from utility import collate_fn, gradient_clipping, random_rotation
 from losses import compute_loss_and_nll, compute_loss
 
 
-def train_edm(num_epochs=10, batch_size=64, learning_rate=1e-4, num_steps=1000, checkpoint_interval=1,log_file="training_loss.txt"):
+def train_edm(num_epochs=10, batch_size=64, learning_rate=1e-4, num_steps=1000, checkpoint_interval=1,log_file="alt_training_loss.txt"):
     
     # Set device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -130,6 +131,11 @@ def train_edm(num_epochs=10, batch_size=64, learning_rate=1e-4, num_steps=1000, 
             # Compute loss
             loss, loss_coords, loss_features = compute_loss(model, batch, noise_schedule)
 
+            # Check if loss is NaN or infinite
+            if torch.isnan(loss) or torch.isinf(loss):
+                print(f"[ERROR] NaN detected in loss at epoch {epoch+1}, batch {batch_idx}. Exiting...")
+                sys.exit(1)  # Exit program with error code 1
+
 
             # Debugging loss values
             if batch_idx % 10 == 0:
@@ -137,7 +143,7 @@ def train_edm(num_epochs=10, batch_size=64, learning_rate=1e-4, num_steps=1000, 
 
             # Backpropagation
             loss.backward()
-            
+
             # Apply gradient clipping
             grad_norm, gradnorm_queue = gradient_clipping(model, gradnorm_queue)
 
@@ -165,8 +171,8 @@ def train_edm(num_epochs=10, batch_size=64, learning_rate=1e-4, num_steps=1000, 
 
         # Save model checkpoint periodically
         if (epoch + 1) % checkpoint_interval == 0:
-            torch.save(model.state_dict(), f"checkpoint_epoch_{epoch+1}.pth")
-            print(f"[INFO] Checkpoint saved: checkpoint_epoch_{epoch+1}.pth")
+            torch.save(model.state_dict(), f"alt_checkpoint_epoch_{epoch+1}.pth")
+            print(f"[INFO] Checkpoint saved: alt_checkpoint_epoch_{epoch+1}.pth")
 
     # Final model save
     torch.save(model.state_dict(), "trained_edm.pth")
@@ -220,5 +226,5 @@ def validate_edm(batch_size=64, num_steps=1000):
 if __name__ == "__main__":
     print("[INFO] Starting Training")
     train_edm(num_epochs=75, batch_size=64, learning_rate=1e-4, num_steps=1000)
-    print("[INFO] Starting Validation")
-    validate_edm()
+    # print("[INFO] Starting Validation")
+    # validate_edm()

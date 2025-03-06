@@ -88,7 +88,8 @@ class EGCL(nn.Module):
         features_out: torch.Tensor = features + self.node_mlp(node_mlp_in)  # [N, features_d]
 
         # calculate coord vector output
-        w = phi_x / (d_e + 1)  # [NN, 1]
+        # w = phi_x / (d_e + 1)  # [NN, 1]
+        w = phi_x / (torch.clamp(d_e, min=1e-5) + 1)
         coords_out: torch.Tensor = coords + reduce @ (w * (x_e[:, 0, :] - x_e[:, 1, :]))  # [N, 3]
 
         return coords_out, features_out
