@@ -13,7 +13,7 @@ from utility import collate_fn, gradient_clipping, random_rotation
 from losses import compute_loss_and_nll, compute_loss
 
 
-def train_edm(num_epochs=10, batch_size=64, learning_rate=1e-4, num_steps=1000, checkpoint_interval=1,log_file="alt_2_training_loss.txt"):
+def train_edm(num_epochs=10, batch_size=64, learning_rate=1e-4, num_steps=1000, checkpoint_interval=1,log_file="alt_3_training_loss.txt"):
     
     # Set device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -23,7 +23,7 @@ def train_edm(num_epochs=10, batch_size=64, learning_rate=1e-4, num_steps=1000, 
     dataset = QM9Dataset(use_h=True, split="train")
 
     # Set seed for reproducibility
-    portion = 0.25
+    portion = 1
     np.random.seed(42)
     subset_indices = np.random.choice(len(dataset), int(portion * len(dataset)), replace=False)
 
@@ -172,11 +172,11 @@ def train_edm(num_epochs=10, batch_size=64, learning_rate=1e-4, num_steps=1000, 
 
         # Save model checkpoint periodically
         if (epoch + 1) % checkpoint_interval == 0:
-            torch.save(model.state_dict(), f"alt_2_checkpoint_epoch_{epoch+1}.pth")
-            print(f"[INFO] Checkpoint saved: alt_checkpoint_epoch_{epoch+1}.pth")
+            torch.save(model.state_dict(), f"alt_3_checkpoint_epoch_{epoch+1}.pth")
+            print(f"[INFO] Checkpoint saved: alt_3_checkpoint_epoch_{epoch+1}.pth")
 
     # Final model save
-    torch.save(model.state_dict(), "alt_2_trained_edm.pth")
+    torch.save(model.state_dict(), "alt_3_trained_edm.pth")
     print("[INFO] Training complete. Model saved as trained_edm.pth")
 
 
@@ -226,6 +226,6 @@ def validate_edm(batch_size=64, num_steps=1000):
 
 if __name__ == "__main__":
     print("[INFO] Starting Training")
-    train_edm(num_epochs=300, batch_size=64, learning_rate=1e-4, num_steps=1000)
+    train_edm(num_epochs=20, batch_size=64, learning_rate=1e-4, num_steps=1000)
     # print("[INFO] Starting Validation")
     # validate_edm()
