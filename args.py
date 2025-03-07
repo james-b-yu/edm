@@ -22,6 +22,8 @@ parser.add_argument("--dataset", default="qm9", help="which dataset to train on,
     
 parser.add_argument("--num-steps", default=1000, type=int, help="number of diffusion steps")
 parser.add_argument("--batch-size", default=64, type=int, help="batch size")
+parser.add_argument("--lr", default=1e-5, type=float, help="learning rate")
+parser.add_argument("--no-clip_grad", default=True, action="store_false", help="whether to clip gradients", dest="clip_grad")
 parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu", type=str, help="torch device to use")
 
 parser.add_argument("--hidden-d", default=256, type=int, help="EGNN hidden dimension")

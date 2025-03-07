@@ -120,6 +120,9 @@ class EGNN(nn.Module):
         
         if isinstance(time, float):
             time = time * torch.ones(size=(coords.shape[0], 1), dtype=coords.dtype, layout=coords.layout, device=coords.device)
+        assert isinstance(time, torch.Tensor)
+        if len(time.shape) == 1:
+            time = time[:, None]
         
         node_attr_with_time     = torch.cat([time] + ([node_attr] if node_attr is not None else []), dim=-1)  # type:ignore
         edge_attr_with_distance = torch.cat([d_e ** 2] + ([edge_attr] if edge_attr is not None else []), dim=-1)

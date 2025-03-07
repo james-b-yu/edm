@@ -18,11 +18,13 @@ class EDMDatasetItem:
     """Attributes:
         n_nodes (int): n, number of atoms in the molecule
         coords (torch.Tensor): [n, 3] giving the 3D coordinates (x) of each atom in the molecule
-        features (torch.Tensor): [n, num_atom_classes] giving the features (h) of each atom in the molecule
+        one_hot (torch.Tensor): [n, num_atom_classes] giving the one_hot encoded classes of each atom in the molecule
+        charges (torch.Tensor): [n, 1] giving the number of protons in each atom in the molecule
     """
     n_nodes: int
     coords: torch.Tensor
-    features: torch.Tensor
+    one_hot: torch.Tensor
+    charges: torch.Tensor
 
 @dataclass
 class EDMDataloaderItem:
@@ -34,27 +36,36 @@ class EDMDataloaderItem:
     Attributes:
         n_nodes (torch.Tensor): [B] where B is the batch size and each bth entry is the number of atoms in the bth molecule. Let N = n_nodes.sum() be the number of atoms in the entire batch and NN = (n_nodes ** 2).sum(), the number of edges in the batch.
         coords (torch.Tensor): [N, 3], where N = n_nodes.sum(), giving the 3D coordinates of each atom in the batch
-        featuers (torch.Tensor): [N, num_atom_classes] giving the features of the each atom in the batch
+        one_hot (torch.Tensor): [N, num_atom_classes] giving the class of the each atom in the batch
+        charges (torch.Tensor): [N, 1] giving the charge of each atom in the batch
         edges (torch.Tensor): (NN, 2) tensor, where NN = (n_nodes ** 2).sum(). Each row of this tensor gives the indices of atoms within the batch for which there is a directed edge. Note that we do allow edges from a node to itself as this simplifies dealing with the ordering of the edges across the code
         reduce (torch.Tensor): (N, NN) binary float matrix where reduce[i, j] = 1.0 if and only if there is an edge from atom i->j
+        mean (torch.Tensor): (B, N) float matrix such that given an [N, dim] matrix A, the operation mean @ A gives an [B, dim] matrix where information is averaged over molecules
         demean (torch.Tensor): (NN, NN) float matrix such that given an [NN, dim] matrix A, the operatation demean @ A gives an [NN, dim] matrix where molecule-wise centre of masses are zero
+        expand_idx (torch.Tensor): (N) if a is a vector of length B with elements corresponding to each molecule in the batch, then a[expand_idx] is a vector of length N where each element is repeated for every atom in the molecule
     """
     n_nodes: torch.Tensor
     coords: torch.Tensor
-    features: torch.Tensor
+    one_hot: torch.Tensor
+    charges: torch.Tensor
     edges: torch.Tensor
     reduce: torch.Tensor
+    mean: torch.Tensor
     demean: torch.Tensor
+    expand_idx: torch.Tensor
     
     def to_(self, *args, **kwargs):
         """calls `torch.Tensor.to` on all tensors, assigning the results
         """
         self.n_nodes = self.n_nodes.to(*args, **kwargs)
         self.coords = self.coords.to(*args, **kwargs)
-        self.features = self.features.to(*args, **kwargs)
+        self.one_hot = self.one_hot.to(*args, **kwargs)
+        self.charges = self.charges.to(*args, **kwargs)
         self.edges = self.edges.to(*args, **kwargs)
         self.reduce = self.reduce.to(*args, **kwargs)
+        self.mean = self.mean.to(*args, **kwargs)
         self.demean = self.demean.to(*args, **kwargs)
+        self.expand_idx = self.expand_idx.to(*args, **kwargs)
 
 QM9Attributes = Literal["index", "A", "B", "C", "mu", "alpha", "homo", "lumo", "gap", "r2", "zpve", "U0", "U", "H", "G", "Cv", "omega1", "zpve_thermo", "U0_thermo", "U_thermo", "H_thermo", "G_thermo", "Cv_thermo"]
 QM9ProcessedData = dict[Literal["num_atoms", "classes", "charges", "positions", QM9Attributes], torch.Tensor]
@@ -64,8 +75,8 @@ class EDMDataset(ABC, td.Dataset):
         """initialise EDM dataset
 
         Args:
-            num_atom_classes (int, optional): number of data features. Defaults to 7.
-            max_nodes (int, optional): maximum number of atoms per molecule. Defaults to 25.
+            num_atom_classes (int, optional): number of data features
+            max_nodes (int, optional): maximum number of atoms per molecule
         """
         super().__init__()
         assert num_atom_classes > 2
@@ -105,12 +116,14 @@ class QM9Dataset(EDMDataset):
         n_nodes = self._data["num_atoms"][index]
         coords = self._data["positions"][index, :n_nodes]
         classes = self._data["classes"][index, :n_nodes]
+        charges = self._data["charges"][index, :n_nodes]
         eye = torch.eye(self.num_atom_classes)
         
         return EDMDatasetItem(
             n_nodes = int(n_nodes),
             coords = coords,
-            features = eye[classes]
+            charges = charges,
+            one_hot = eye[classes]
         )
 
 class DummyDataset(EDMDataset):
@@ -134,24 +147,28 @@ class DummyDataset(EDMDataset):
         """
         n_nodes = int(torch.randint(low=2, high=self.max_nodes + 1, size=(), dtype=torch.int64))
         coords = torch.randn((n_nodes, 3), dtype=torch.float32)
-        features = torch.eye(self.num_atom_classes, dtype=torch.float32)[torch.randint(low=0, high=self.num_atom_classes, size=(n_nodes,), dtype=torch.int64)]
+        charges = 1 + torch.randint(low=0, high=self.num_atom_classes, size=(n_nodes,), dtype=torch.int64)
+        one_hot = torch.eye(self.num_atom_classes, dtype=torch.float32)[charges - 1]
+        
 
-        return EDMDatasetItem(n_nodes=n_nodes, coords=coords, features=features)
+        return EDMDatasetItem(n_nodes=n_nodes, coords=coords, one_hot=one_hot, charges=charges)
 
 def _collate_fn(data: list[EDMDatasetItem]):
         n_nodes = torch.tensor([d.n_nodes for d in data], dtype=torch.int64)
         coords = torch.cat([d.coords for d in data])
-        features = torch.cat([d.features for d in data])
+        one_hot = torch.cat([d.one_hot for d in data])
+        charges = torch.cat([d.charges for d in data])[:, None]
 
         _n_nodes_cumsum = torch.cumsum(torch.cat([torch.tensor([0], dtype=torch.int64), n_nodes]), dim=0)
 
         edges = torch.cat([torch.cartesian_prod(torch.arange(b_n.item(), dtype=torch.int64), torch.arange(b_n.item(), dtype=torch.int64)) + _n_nodes_cumsum[b] for b, b_n in enumerate(n_nodes)], dim=0)
         reduce = torch.block_diag(*[torch.block_diag(*[torch.ones((int(n), )).scatter_(0, torch.tensor([m]), 0) for m in range(n)]) for n in n_nodes])
         demean = torch.block_diag(*[torch.eye(int(n), dtype=torch.float32) - (torch.ones((int(n), int(n)), dtype=torch.float32) / n) for n in n_nodes])
-
+        expand_idx = torch.cat([torch.ones(size=(int(n), ), dtype=torch.long) * idx for idx, n in enumerate(n_nodes)])
+        mean = torch.block_diag(*[(1/float(n)) * torch.ones(size=(int(n), 1), dtype=torch.float32) @ torch.ones(size=(1, int(n)), dtype=torch.float32) for n in n_nodes])
         coords = demean @ coords  # immediately demean the coords
 
-        return EDMDataloaderItem(n_nodes=n_nodes, coords=coords, features=features, edges=edges, reduce=reduce, demean=demean)
+        return EDMDataloaderItem(n_nodes=n_nodes, coords=coords, one_hot=one_hot, charges=charges, edges=edges, reduce=reduce, mean=mean, demean=demean, expand_idx=expand_idx)
 
 def get_dummy_dataloader(num_atom_classes: int, len: int, max_nodes: int, batch_size: int):
     return td.DataLoader(dataset=DummyDataset(num_atom_classes=num_atom_classes, max_nodes=max_nodes, len=len), batch_size=batch_size, collate_fn=_collate_fn)

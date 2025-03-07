@@ -84,8 +84,8 @@ def test_equivariance_of_egcl_cpu(dummy_dl, default_egcl_cpu):
         data: EDMDataloaderItem
         Q = _get_random_q(device="cpu")
         
-        x, h = default_egcl_cpu(coords=data.coords, features=data.features, edges=data.edges, reduce=data.reduce)
-        x_rot, h_rot = default_egcl_cpu(coords=data.coords @ Q, features=data.features, edges=data.edges, reduce=data.reduce)
+        x, h = default_egcl_cpu(coords=data.coords, features=data.one_hot, edges=data.edges, reduce=data.reduce)
+        x_rot, h_rot = default_egcl_cpu(coords=data.coords @ Q, features=data.one_hot, edges=data.edges, reduce=data.reduce)
 
         assert torch.isclose(x @ Q, x_rot, atol=1e-5, rtol=1e-5).all()
         assert torch.isclose(h, h_rot, atol=1e-5, rtol=1e-5).all()
@@ -99,8 +99,8 @@ def test_equivariance_of_egcl_cuda(dummy_dl, default_egcl_cuda):
         Q = _get_random_q(device="cuda")
         data.to_(device="cuda")
 
-        x, h = default_egcl_cuda(coords=data.coords, features=data.features, edges=data.edges, reduce=data.reduce)
-        x_rot, h_rot = default_egcl_cuda(coords=data.coords @ Q, features=data.features, edges=data.edges, reduce=data.reduce)
+        x, h = default_egcl_cuda(coords=data.coords, features=data.one_hot, edges=data.edges, reduce=data.reduce)
+        x_rot, h_rot = default_egcl_cuda(coords=data.coords @ Q, features=data.one_hot, edges=data.edges, reduce=data.reduce)
 
         assert torch.isclose(x @ Q, x_rot, atol=1e-5, rtol=1e-5).all()
         assert torch.isclose(h, h_rot, atol=1e-5, rtol=1e-5).all()
@@ -114,8 +114,8 @@ def test_equivariance_of_egnn_cpu(dummy_dl, default_egnn_cpu):
         Q = _get_random_q(device="cpu")
         
         time = float(torch.randint(low=0, high=1001, size=()) / 1000)
-        x, h = default_egnn_cpu(data.n_nodes, data.coords, data.features, data.edges, data.reduce, data.demean, time=time)
-        x_rot, h_rot = default_egnn_cpu(data.n_nodes, data.coords @ Q, data.features, data.edges, data.reduce, data.demean, time=time)
+        x, h = default_egnn_cpu(data.n_nodes, data.coords, data.one_hot, data.edges, data.reduce, data.demean, time=time)
+        x_rot, h_rot = default_egnn_cpu(data.n_nodes, data.coords @ Q, data.one_hot, data.edges, data.reduce, data.demean, time=time)
 
         assert torch.isclose(x @ Q, x_rot, rtol=1e-3).to(torch.float32).mean() >= 0.99
         assert torch.isclose(h, h_rot, rtol=1e-3).to(torch.float32).mean() >= 0.99
@@ -129,8 +129,8 @@ def test_equivariance_of_egnn_cuda(dummy_dl, default_egnn_cuda):
         data.to_("cuda")
         
         time = float(torch.randint(low=0, high=1001, size=()) / 1000)
-        x, h = default_egnn_cuda(data.n_nodes, data.coords, data.features, data.edges, data.reduce, data.demean, time=time)
-        x_rot, h_rot = default_egnn_cuda(data.n_nodes, data.coords @ Q, data.features, data.edges, data.reduce, data.demean, time=time)
+        x, h = default_egnn_cuda(data.n_nodes, data.coords, data.one_hot, data.edges, data.reduce, data.demean, time=time)
+        x_rot, h_rot = default_egnn_cuda(data.n_nodes, data.coords @ Q, data.one_hot, data.edges, data.reduce, data.demean, time=time)
 
         assert torch.isclose(x @ Q, x_rot, rtol=1e-3).to(torch.float32).mean() >= 0.99
         assert torch.isclose(h, h_rot, rtol=1e-3).to(torch.float32).mean() >= 0.99
@@ -145,8 +145,8 @@ def test_equivariance_of_egnn_cuda_on_qm9(qm9_h_train_dl, default_egnn_cuda):
         data.to_("cuda")
         
         time = float(torch.randint(low=0, high=1001, size=()) / 1000)
-        x, h = default_egnn_cuda(data.n_nodes, data.coords, data.features, data.edges, data.reduce, data.demean, time=time)
-        x_rot, h_rot = default_egnn_cuda(data.n_nodes, data.coords @ Q, data.features, data.edges, data.reduce, data.demean, time=time)
+        x, h = default_egnn_cuda(data.n_nodes, data.coords, data.one_hot, data.edges, data.reduce, data.demean, time=time)
+        x_rot, h_rot = default_egnn_cuda(data.n_nodes, data.coords @ Q, data.one_hot, data.edges, data.reduce, data.demean, time=time)
 
         assert torch.isclose(x @ Q, x_rot, rtol=1e-3).to(torch.float32).mean() >= 0.99
         assert torch.isclose(h, h_rot, rtol=1e-3).to(torch.float32).mean() >= 0.99
