@@ -95,22 +95,24 @@ class Queue():
         return np.std(self.items)
 
 
-def gradient_clipping(flow: torch.nn.Module, gradnorm_queue: Queue):
+def gradient_clipping(flow: torch.nn.Module, gradnorm_queue: Queue, max: float):
     """COPIED FROM HOOGEBOOM REPO
 
     Args:
         flow (torch.Tensor): _description_
         gradnorm_queue (_type_): _description_
+        max (float): _description_
 
     Returns:
         _type_: _description_
     """
     # Allow gradient norm to be 150% + 2 * stdev of the recent history.
     max_grad_norm = 1.5 * gradnorm_queue.mean() + 2 * gradnorm_queue.std()
+    max_grad_norm = max if max <= max_grad_norm else max_grad_norm
 
     # Clips gradient and returns the norm
     grad_norm = torch.nn.utils.clip_grad_norm_(
-        flow.parameters(), max_norm=max_grad_norm, norm_type=2.0)
+        flow.parameters(), max_norm=float(max_grad_norm), norm_type=2.0)
 
     if float(grad_norm) > max_grad_norm:
         gradnorm_queue.add(float(max_grad_norm))

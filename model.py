@@ -14,10 +14,13 @@ class EGCLConfig:
 @dataclass
 class EGNNConfig(EGCLConfig):
     num_layers: int
-
-def _fix_coord_output_variance(module: nn.Module):
-    if isinstance(module, nn.Linear):
-        module.weight.data *= module.weight.data.shape[1] ** -0.5
+    
+def fan_out_init(p: nn.Module, skip: list[nn.Module]):
+    if isinstance(p, nn.Linear) and p not in skip:
+        nn.init.kaiming_uniform_(p.weight, mode="fan_out", nonlinearity="relu")
+        p.weight.data *= 0.01
+        if p.bias is not None:
+            nn.init.zeros_(p.bias)
 
 class EGCL(nn.Module):
     def __init__(self, config: EGCLConfig):
@@ -32,6 +35,9 @@ class EGCL(nn.Module):
             nn.SiLU()
         )
 
+        coord_final_layer = nn.Linear(config.hidden_d, 1, bias=False)
+        # make the final layer of the coord_mlp have small initial weights, to avoid the network blowing up when we start training (empirically if we do not include this line, then every layer of the EGCL gives a larger magnitude for coords and features, so by the last layer we have a tensor full of nans)
+        nn.init.xavier_uniform_(coord_final_layer.weight, gain=0.001)
         # the \(\phi_{x}\) network for coordinate update (same architecture as above but we have an additional projection onto a scalar)
         self.coord_mlp = nn.Sequential(
             #            hi               hj            dij2         aij
@@ -39,7 +45,7 @@ class EGCL(nn.Module):
             nn.SiLU(),
             nn.Linear(config.hidden_d, config.hidden_d),
             nn.SiLU(),
-            nn.Linear(config.hidden_d, 1)
+            coord_final_layer,
         )
 
         # the \(\phi_{h}\) network for node update
@@ -54,9 +60,9 @@ class EGCL(nn.Module):
             nn.Linear(config.hidden_d, 1),
             nn.Sigmoid()
         )
-
-        # make the final layer of the coord_mlp have small initial weights, to avoid the network blowing up when we start training (empirically if we do not include this line, then every layer of the EGCL gives a larger magnitude for coords and features, so by the last layer we have a tensor full of nans)
-        self.coord_mlp[-1].apply(_fix_coord_output_variance)
+        
+        for p in self.modules():
+            fan_out_init(p, skip=[self.coord_mlp[-1]])
 
         # save things
         self.config = config

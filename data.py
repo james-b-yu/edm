@@ -165,7 +165,7 @@ def _collate_fn(data: list[EDMDatasetItem]):
         reduce = torch.block_diag(*[torch.block_diag(*[torch.ones((int(n), )).scatter_(0, torch.tensor([m]), 0) for m in range(n)]) for n in n_nodes])
         demean = torch.block_diag(*[torch.eye(int(n), dtype=torch.float32) - (torch.ones((int(n), int(n)), dtype=torch.float32) / n) for n in n_nodes])
         expand_idx = torch.cat([torch.ones(size=(int(n), ), dtype=torch.long) * idx for idx, n in enumerate(n_nodes)])
-        mean = torch.block_diag(*[(1/float(n)) * torch.ones(size=(int(n), 1), dtype=torch.float32) @ torch.ones(size=(1, int(n)), dtype=torch.float32) for n in n_nodes])
+        mean = torch.block_diag(*[(1/float(n)) * torch.ones(size=(1, int(n)), dtype=torch.float32) for n in n_nodes])
         coords = demean @ coords  # immediately demean the coords
 
         return EDMDataloaderItem(n_nodes=n_nodes, coords=coords, one_hot=one_hot, charges=charges, edges=edges, reduce=reduce, mean=mean, demean=demean, expand_idx=expand_idx)

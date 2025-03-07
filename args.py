@@ -18,25 +18,30 @@ def _validate_args(args: argparse.Namespace):
     if args.pipeline == "evaluate" and args.checkpoint is None:
         raise argparse.ArgumentTypeError("--checkpoint must be set if --pipeline=='evaluate'")
 
+parser.add_argument("--no-use-wandb", default=True, action="store_false", dest="use_wandb", help="specify if you do not want to use wandb (if not specified, we use wandb)")
+parser.add_argument("--wandb-project", default="MLMI4 EDM", type=str, help="wandb project name")
+
+
 parser.add_argument("--dataset", default="qm9", help="which dataset to train on, e.g. 'qm9', 'qm9_no_h'")
     
 parser.add_argument("--num-steps", default=1000, type=int, help="number of diffusion steps")
 parser.add_argument("--batch-size", default=64, type=int, help="batch size")
 parser.add_argument("--lr", default=1e-5, type=float, help="learning rate")
-parser.add_argument("--no-clip_grad", default=True, action="store_false", help="whether to clip gradients", dest="clip_grad")
+parser.add_argument("--no-clip_grad", default=True, action="store_false", help="specify if you do not want to clip gradients (if not specified, we clip gradients)", dest="clip_grad")
+parser.add_argument("--max_grad_norm", default=8., type=float, help="maximum gradient norm to tolerate")
 parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu", type=str, help="torch device to use")
 
 parser.add_argument("--hidden-d", default=256, type=int, help="EGNN hidden dimension")
 parser.add_argument("--num-layers", default=9, type=int, help="EGNN layers")
 
 parser.add_argument("--run-name", default="edm_run", type=str, help="the name of the run")
-parser.add_argument("--out-dir", default="./outputs", type=str, help="output will be contained in the folder <out_dir>/<run_name>")
+parser.add_argument("--out-dir", default="./checkpoints", type=str, help="output will be contained in the folder <out_dir>/<run_name>/")
 
 parser.add_argument("--extension", default=None, type=str, help="extension to use")
 parser.add_argument("--pipeline", default="train", type=str, help="pipeline", choices=["train", "evaluate"])
 parser.add_argument("--checkpoint", default=None, type=str, help="if specified, load checkpoint located in this folder")
 
-parser.add_argument("--start-epoch", default=0, type=int, help="train epochs in [start-epoch, end-epoch)")
+parser.add_argument("--start-epoch", default=0, type=int, help="train epochs in [start-epoch, end-epoch) -- note this is only for bookkeeping and does not affect which model is loaded")
 parser.add_argument("--end-epoch", default=1300, type=int, help="train epochs in [start-epoch, end-epoch)")
 
 parser.add_argument("--data-dir", default="./data", type=str, help="directory in which datasets are stored")

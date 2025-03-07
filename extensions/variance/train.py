@@ -3,6 +3,9 @@ from typing import Literal
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 import torch
+from os import path, makedirs
+import pickle
+from wandb.wandb_run import Run
 
 from data import EDMDataset, EDMDataloaderItem
 from model import EGNNConfig
@@ -10,7 +13,11 @@ from utils.diffusion import Queue, gradient_clipping, scale_inputs
 
 from .variance import VarianceDiffusion
 
-def one_epoch(args: Namespace, epoch: int, split: Literal["train", "valid", "test"], model: VarianceDiffusion, gradnorm_queue: Queue, dataloaders: dict[str, DataLoader]):
+def one_epoch(args: Namespace, epoch: int, split: Literal["train", "valid", "test"], model: VarianceDiffusion, gradnorm_queue: Queue, dataloaders: dict[str, DataLoader], wandb_run: None|Run):
+    losses: list[float] = []
+    dists: list[float] = []
+    grad_norms: list[float] = []
+    
     for idx, data in enumerate(pbar := tqdm(dataloaders[split], leave=False, unit="batch")):
         data: EDMDataloaderItem
         
@@ -56,40 +63,51 @@ def one_epoch(args: Namespace, epoch: int, split: Literal["train", "valid", "tes
         
         bet_b_batch = model.schedule["beta_sigma"][time_batch]   # backward transition variances (note the first element is a dummy)
         
-        # # For train likelihood, treat L0 like L12,3,4, etc.
-        # dim_coord = (data.n_nodes - 1.) * 3  # dimension of coordinate subspace for each molecule
+        # For train likelihood, treat L0 like L12,3,4, etc.
+        dim_coord = (data.n_nodes - 1.) * 3  # dimension of coordinate subspace for each molecule
         
-        # loss_coord = 0.5 * torch.sum(((pred_eps_coords - eps_coords) ** 2 / gamma_x[:, None]).sum(axis=-1) * (alf_L_sq * bet_f_sq) / (alf_sq * sig_sq)) \
-        #            + 0.5 * torch.sum(dim_coord * (gamma_x_batch.log() - bet_b_batch.log() + bet_b_batch / gamma_x_batch))
-        # loss_features = 0.5 * torch.sum(((pred_eps_features - eps_features) ** 2 / gamma_h).sum(axis=-1) * (alf_L_sq * bet_f_sq) / (alf_sq * sig_sq)) \
-        #            + 0.5 * torch.sum(data.n_nodes[:, None] * (gamma_h_batch.log() - bet_b_batch[:, None].log() + bet_b_batch[:, None] / gamma_h_batch))
+        loss_coord = data.mean @ (((pred_eps_coords - eps_coords) ** 2 / gamma_x[:, None]).sum(axis=-1) * (alf_L_sq * bet_f_sq) / (alf_sq * sig_sq)) \
+                   + dim_coord * (gamma_x_batch.log() - bet_b_batch.log() + bet_b_batch / gamma_x_batch)
+        loss_features = data.mean @ (((pred_eps_features - eps_features) ** 2 / gamma_h).sum(axis=-1) * (alf_L_sq * bet_f_sq) / (alf_sq * sig_sq)) \
+                   + (data.n_nodes[:, None] * (gamma_h_batch.log() - bet_b_batch[:, None].log() + bet_b_batch[:, None] / gamma_h_batch)).sum(dim=-1)
         
-        # total_loss = (loss_coord + loss_features)
-        
-        # if split == "train":
-        #     total_loss.backward()
-            
+        total_loss = (loss_coord + loss_features)
+        total_loss = total_loss.mean()
             
         ## calculate comparable losses
-        # with torch.no_grad():
-        loss_coord_compat = (1./3.) * 0.5 * (pred_eps_coords - eps_coords).norm(dim=-1) ** 2
-        loss_features_compat = (1./model.egnn.config.features_d) * 0.5 * (pred_eps_features - eps_features).norm(dim=-1) ** 2
-        total_loss_compat = data.mean @ (loss_coord_compat + loss_features_compat)
-        total_loss_compat = total_loss_compat.mean()
-        total_loss_compat.backward()
+        with torch.no_grad():
+            eps = torch.cat([eps_coords, eps_features], dim=-1)
+            pred_eps = torch.cat([pred_eps_coords, pred_eps_features], dim=-1)
+            
+            loss_coord_compat = (1./3.) * 0.5 * (pred_eps_coords - eps_coords).norm(dim=-1) ** 2
+            loss_features_compat = (1./model.egnn.config.features_d) * 0.5 * (pred_eps_features - eps_features).norm(dim=-1) ** 2
+            total_loss_compat = data.mean @ (loss_coord_compat + loss_features_compat)
+            total_loss_compat = total_loss_compat.mean()
+            # total_loss_compat.backward()
         
-        if args.clip_grad:
-            grad_norm = gradient_clipping(model, gradnorm_queue)
-        else:
-            grad_norm = 0.
+        grad_norm = 0.
+        if split == "train":
+            total_loss.backward()
+            if args.clip_grad:
+                grad_norm = gradient_clipping(model, gradnorm_queue, max=args.max_grad_norm)
         
-        pbar.set_description(f"Compat loss: {total_loss_compat:.2f} Grad norm: {grad_norm:.2f}")
+        pbar.set_description(f"Total loss: {total_loss:.2f} Compat loss: {total_loss_compat:.2f} Grad norm: {grad_norm:.2f}")
         
-        # pbar.set_description(f"Compat loss: total: {total_loss_compat:.2f}, coord: {loss_coord_compat:.2f}, features: {loss_features_compat:.2f}; Actual: {total_loss:.2f}/{loss_coord:.2f}/{loss_features:.2f}")
-        pass
+        if wandb_run is not None:
+            wandb_run.log({
+                f"{split}_batch_loss": total_loss,
+                f"{split}_batch_avr_dist": total_loss_compat,
+                f"{split}_batch_grad_norm": grad_norm
+            })
+        
+        losses.append(float(total_loss))
+        dists.append(float(total_loss_compat))
+        grad_norms.append(float(grad_norm))
+        
+    return tuple(sum(l) / len(l) for l in [losses, dists, grad_norms])
     
 
-def enter_train_valid_test_loop(args: Namespace, dataloaders: dict[str, DataLoader]):
+def enter_train_valid_test_loop(args: Namespace, dataloaders: dict[str, DataLoader], wandb_run: None|Run):
     
     for _, dl in dataloaders.items():
         assert(isinstance(dl.dataset, EDMDataset))
@@ -111,9 +129,35 @@ def enter_train_valid_test_loop(args: Namespace, dataloaders: dict[str, DataLoad
         weight_decay=1e-12
     )
     
+    if args.checkpoint is not None:
+        print(f"Loading model checkpoints using 'model.pth', 'optim.pth' located in {args.checkpoint}")
+        model.load_state_dict(torch.load(path.join(args.checkpoint, "model.pth"), map_location=args.device))
+        optim.load_state_dict(torch.load(path.join(args.checkpoint, "optim.pth"), map_location=args.device))
+    
     for epoch in tqdm(range(args.start_epoch, args.end_epoch), leave=False, unit="epoch"):
+        makedirs(path.join(args.out_dir, args.run_name), exist_ok=True)
+        
         model.train()
         optim.zero_grad()
-        one_epoch(args, epoch, "train", model, gradnorm_queue, dataloaders)
+        loss, dist, grad_norm = one_epoch(args, epoch, "train", model, gradnorm_queue, dataloaders, wandb_run)
         optim.step()
         
+        # now save things
+        torch.save(optim.state_dict(), path.join(args.out_dir, args.run_name, "optim.pth"))
+        torch.save(optim.state_dict(), path.join(args.out_dir, args.run_name, f"optim_epoch_{epoch}.pth"))
+        
+        torch.save(model.state_dict(), path.join(args.out_dir, args.run_name, "model.pth"))
+        torch.save(model.state_dict(), path.join(args.out_dir, args.run_name, f"model_epoch_{epoch}.pth"))
+        
+        with open(path.join(args.out_dir, args.run_name, "args.pkl"), "wb") as f:
+            pickle.dump(args, f)
+        with open(path.join(args.out_dir, args.run_name, f"args_epoch_{epoch}.pkl"), "wb") as f:
+            pickle.dump(args, f)
+            
+        if wandb_run is not None:
+            wandb_run.log({
+                "train_loss": loss,
+                "train_dist": dist,
+                "train_grad_norm": grad_norm,
+                "epoch": epoch
+            })

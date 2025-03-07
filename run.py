@@ -7,13 +7,19 @@ import sys
 
 from data import get_qm9_dataloader
 sys.path.append(".")
+from os import path
+import pickle
+import wandb
 
-from args import args
+from args import args, parser
 from extensions.variance import run
 
 if __name__ == "__main__":
     if args.checkpoint is not None:
-        raise NotImplementedError()  # TODO: load args!
+        with open(path.join(args.checkpoint, "args.pkl"), "rb") as f:
+            args_disk = pickle.load(f)
+            args = parser.parse_args(namespace=args_disk)
+        
     
     if args.dataset in ["qm9", "qm9_no_h"]:
         dataloaders = {
@@ -22,6 +28,14 @@ if __name__ == "__main__":
     else:
         raise NotImplementedError() 
 
+    wandb_run = None
+    if args.use_wandb:
+        wandb.login()
+        wandb_run = wandb.init(
+            project=args.wandb_project,
+            name=args.run_name,
+            config=vars(args)  
+        )
     
     if args.extension == "variance":
-        run(args, dataloaders)
+        run(args, dataloaders, wandb_run)
