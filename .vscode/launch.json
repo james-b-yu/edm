@@ -5,6 +5,33 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "New Arch Pretrained",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/run.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--checkpoint",
+                "./checkpoints/new_arch_pretrained",
+                "--run-name",
+                "debug_new_arch_pretrained",
+                "--no-restore-optim-state",
+            ]
+        },
+        {
+            "name": "QM9 New",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/run.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--extension",
+                "variance",
+                "--run-name",
+                "debug_new_arch",
+            ]
+        },
+        {
             "name": "Debug current run",
             "type": "debugpy",
             "request": "launch",

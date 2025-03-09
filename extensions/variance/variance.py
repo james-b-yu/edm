@@ -134,6 +134,10 @@ class VarianceDiffusion(nn.Module):
             
         
         if split=="train":
+            eps = torch.concat([eps_coords, eps_features], dim=-1)
+            pred_eps = torch.concat([pred_eps_coords, pred_eps_features], dim=-1)
+            avr_sq_dist = ((eps - pred_eps) ** 2).mean()
+            
             loss_t_greater_than_zero = get_van_loss_t_greater_than_zero()  # loss for terms L1, ..., LT
             # loss_term_0 = -get_van_log_pxh_given_z0_without_constants()    # loss for terms L0
             kl_prior = get_van_kl_prior()  # is negligible if we have done things properly
@@ -142,6 +146,6 @@ class VarianceDiffusion(nn.Module):
             loss_t = loss_t_greater_than_zero
             
             loss_training = loss_t + kl_prior - data.size_log_probs
-            return loss_training.mean()
+            return loss_training.mean(), avr_sq_dist
         else:
             raise NotImplementedError

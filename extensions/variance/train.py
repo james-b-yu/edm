@@ -22,7 +22,7 @@ def one_epoch(args: Namespace, epoch: int, split: Literal["train", "valid", "tes
         data: EDMDataloaderItem
         
         data.to_(args.device)        
-        loss = model.calculate_loss(args=args, split="train", data=data)
+        compat_loss, dist = model.calculate_loss(args=args, split="train", data=data)
         
         # pred_eps_coords, pred_eps_features = model.egnn()
         
@@ -58,21 +58,21 @@ def one_epoch(args: Namespace, epoch: int, split: Literal["train", "valid", "tes
         
         grad_norm = 0.
         if split == "train":
-            loss.backward()
+            dist.backward()
             if args.clip_grad:
                 grad_norm = gradient_clipping(model, gradnorm_queue, max=args.max_grad_norm)
         
-        pbar.set_description(f"Total loss: {loss:.2f} Compat loss: {loss:.2f} Grad norm: {grad_norm:.2f}")
+        pbar.set_description(f"Total loss: {dist:.2f} Compat loss: {compat_loss:.2f} Grad norm: {grad_norm:.2f}")
         
         if wandb_run is not None:
             wandb_run.log({
-                f"{split}_batch_loss": loss,
-                f"{split}_batch_avr_dist": loss,
+                f"{split}_batch_compat_loss": compat_loss,
+                f"{split}_batch_avr_dist": dist,
                 f"{split}_batch_grad_norm": grad_norm
             })
         
-        losses.append(float(loss))
-        dists.append(float(loss))
+        losses.append(float(compat_loss))
+        dists.append(float(dist))
         grad_norms.append(float(grad_norm))
         
     return tuple(sum(l) / len(l) for l in [losses, dists, grad_norms])
@@ -93,6 +93,8 @@ def enter_train_valid_test_loop(args: Namespace, dataloaders: dict[str, DataLoad
         edge_attr_d=0,
         hidden_d=args.hidden_d,
         num_layers=args.num_layers,
+        use_tanh=args.use_tanh,
+        tanh_range=args.tanh_range
     ), num_steps=args.num_steps, device=args.device)
     optim = torch.optim.AdamW(
         model.parameters(),
@@ -103,7 +105,8 @@ def enter_train_valid_test_loop(args: Namespace, dataloaders: dict[str, DataLoad
     if args.checkpoint is not None:
         print(f"Loading model checkpoints using 'model.pth', 'optim.pth' located in {args.checkpoint}")
         model.load_state_dict(torch.load(path.join(args.checkpoint, "model.pth"), map_location=args.device))
-        optim.load_state_dict(torch.load(path.join(args.checkpoint, "optim.pth"), map_location=args.device))
+        if args.restore_optim_state:
+            optim.load_state_dict(torch.load(path.join(args.checkpoint, "optim.pth"), map_location=args.device))
         
         # set potentially new learning rate and rescale moments
         new_lr = args.lr
@@ -135,7 +138,7 @@ def enter_train_valid_test_loop(args: Namespace, dataloaders: dict[str, DataLoad
             
         if wandb_run is not None:
             wandb_run.log({
-                "train_loss": loss,
+                "train_compat_loss": loss,
                 "train_dist": dist,
                 "train_grad_norm": grad_norm,
                 "epoch": epoch
