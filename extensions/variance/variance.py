@@ -1,7 +1,10 @@
+from argparse import Namespace
+from typing import Literal
 import torch
 from torch import nn
+from data import EDMDataloaderItem
 from model import EGNN, EGNNConfig
-from utils.diffusion import cosine_noise_schedule, cosine_beta_schedule
+from utils.diffusion import cdf_standard_gaussian, cosine_noise_schedule, cosine_beta_schedule, gaussian_KL, gaussian_KL_batch, scale_features, unscale_features
 
 class VarianceDiffusion(nn.Module):
     def __init__(self, egnn_config: EGNNConfig, num_steps: int, device: torch.device|str):
@@ -50,3 +53,95 @@ class VarianceDiffusion(nn.Module):
         
     def forward(self):
         raise NotImplementedError("Please use self.egnn.forward")
+    
+    def calculate_loss(self, args: Namespace, split: Literal["train", "valid", "test"], data: EDMDataloaderItem):
+        s_coords, s_one_hot, s_charges = data.coords, *scale_features(data.one_hot, data.charges)
+        s_features = torch.cat([s_one_hot, s_charges], dim=-1)
+        
+        # if calculating training loss, treat L0 like L1:T
+        if split == "train":
+            lowest_t = 0
+        else:
+            lowest_t = 1
+        
+        t_batch_int = torch.randint(low=lowest_t, high=args.num_steps + 1, size=(data.n_nodes.shape[0], ), dtype=torch.long, device=args.device)  # [B]
+        t_nodes_int = t_batch_int[data.expand_idx] # [N]
+        s_batch_int = t_batch_int - 1
+        s_nodes_int = s_batch_int[data.expand_idx] # [N]
+        t_is_zero = (t_batch_int == 0).float()  # Important to compute log p(x | z0).
+        
+        s = s_nodes_int / args.num_steps
+        t = t_nodes_int / args.num_steps
+        
+        alf = self.schedule["alpha"][t_nodes_int]
+        sig = self.schedule["sigma"][t_nodes_int]
+        sig_sq = self.schedule["sigma_squared"][t_nodes_int]
+        
+        eps_coords = data.demean @ torch.randn_like(s_coords)
+        eps_features = torch.randn_like(s_features)
+        
+        z_coords = alf[:, None] * s_coords + sig[:, None] * eps_coords
+        z_features = alf[:, None] * s_features + sig[:, None] * eps_features
+        
+        pred_eps_coords, pred_eps_features = self.egnn(n_nodes=data.n_nodes, coords=z_coords, features=z_features, edges=data.edges, reduce=data.reduce, demean=data.demean, time=t)
+        
+        ### TOOLS TO CALCULATE VANILLA LOSS ###
+        def get_van_loss_t_greater_than_zero(): # for losses L1, ..., LT
+            sq_err_coords = (data.batch_mean @ (eps_coords - pred_eps_coords) ** 2).mean(dim=-1)  # XXX: during training, we take means; during evaluation we take sums
+            sq_err_features = (data.batch_mean @ (eps_features - pred_eps_features) ** 2).mean(dim=-1)  # XXX: during training, we take means; during evaluation we take sums
+            return 0.5 * (sq_err_coords + sq_err_features)
+        
+        def get_van_kl_prior(): # for KL between q(zT | x) and standard normal
+            alf_T = torch.full(size=(data.coords.shape[0], ), fill_value=float(self.schedule["alpha"][-1]), dtype=data.coords.dtype, device=args.device)  # [N]            
+            sig_sq_T = torch.full_like(data.n_nodes, fill_value=float(self.schedule["sigma_squared"][-1]))  # [B]
+            
+            mu_T_coords = alf_T[:, None] * s_coords 
+            mu_T_features = alf_T[:, None] * s_features
+            
+            kl_features = gaussian_KL_batch(mu_T_features, sig_sq_T, torch.zeros_like(mu_T_features), torch.ones_like(sig_sq_T), n_nodes=data.n_nodes, batch_sum=data.batch_sum, subspace=False)
+            kl_coords = gaussian_KL_batch(mu_T_coords, sig_sq_T, torch.zeros_like(mu_T_coords), torch.ones_like(sig_sq_T), n_nodes=data.n_nodes, batch_sum=data.batch_sum, subspace=True)
+            return kl_coords + kl_features
+            
+        def get_van_log_pxh_given_z0_without_constants():
+            # for continuous coords, simply use euclidean distance
+            log_px_given_z0 = -0.5 * (data.batch_mean @ (eps_coords - pred_eps_coords) ** 2).mean(dim=-1)  # XXX: during training we take means, during inference we take sums
+            
+            # for integer one_hot and charges, scale back to integer scaling
+            z_one_hot = z_features[:, :-1]
+            z_charges = z_features[:, -1]
+            us_z_one_hot, us_z_charges = unscale_features(z_one_hot, z_charges)
+            us_sig_one_hot, us_sig_charges = unscale_features(self.schedule["sigma"][0], self.schedule["sigma"][0])
+            
+            # for integer-value charges, find gaussian integral of radius 1 around the deviation
+            us_charge_err_centered = data.charges - us_z_charges
+            
+            log_ph_charges_given_z0 = data.batch_sum @ torch.log(
+                cdf_standard_gaussian((us_charge_err_centered + 0.5) / us_sig_charges)
+                - cdf_standard_gaussian((us_charge_err_centered - 0.5) / us_sig_charges)
+                + 1e-10
+            ).sum(dim=-1)
+            
+            # for one-hot values, find gaussian integral around 1, since one-hot encoded
+            us_one_hot_err_centered = us_z_one_hot - 1.
+            log_ph_one_hot_given_z0_unnormalised = torch.log(
+                cdf_standard_gaussian((us_one_hot_err_centered + 0.5) / us_sig_one_hot)
+                - cdf_standard_gaussian((us_one_hot_err_centered - 0.5) / us_sig_one_hot)
+                + 1e-10
+            )
+            log_ph_one_hot_given_z0 = data.batch_sum @ (log_ph_one_hot_given_z0_unnormalised - torch.logsumexp(log_ph_one_hot_given_z0_unnormalised, dim=-1, keepdim=True)).sum(dim=-1)
+            
+            return log_px_given_z0 + log_ph_one_hot_given_z0 + log_ph_charges_given_z0
+            
+        
+        if split=="train":
+            loss_t_greater_than_zero = get_van_loss_t_greater_than_zero()  # loss for terms L1, ..., LT
+            # loss_term_0 = -get_van_log_pxh_given_z0_without_constants()    # loss for terms L0
+            kl_prior = get_van_kl_prior()  # is negligible if we have done things properly
+            
+            # loss_t = loss_term_0 * t_is_zero + loss_t_greater_than_zero * (1 - t_is_zero)
+            loss_t = loss_t_greater_than_zero
+            
+            loss_training = loss_t + kl_prior - data.size_log_probs
+            return loss_training.mean()
+        else:
+            raise NotImplementedError

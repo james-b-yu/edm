@@ -1,5 +1,6 @@
 import torch
 import numpy as np
+from math import log
 
 def cosine_noise_schedule(num_steps: int, device: torch.device|str):
     t = torch.linspace(0, 1, num_steps, device=device)
@@ -50,27 +51,25 @@ def cosine_beta_schedule(timesteps, device: torch.device|str, s=0.008):
         "beta_sigma": torch.from_numpy(np.concatenate([betas_transition[0, None], betas_sigma_transition], axis=0).astype(np.float32)).to(device=device),  # copy zeroth element of beta into beta_sigma
     }
     
-def scale_inputs(coords: torch.Tensor, one_hot: torch.Tensor, charges: torch.Tensor):
+def scale_features(one_hot: torch.Tensor, charges: torch.Tensor):
     """use the scaling implmeneted by the paper
 
     Args:
-        coords (torch.Tensor):
         one_hot (torch.Tensor):
         charges (torch.Tensor):
     """
     
-    return coords, 0.25 * one_hot, 0.1 * charges
+    return 0.25 * one_hot, 0.1 * charges
 
-def unscale_outputs(coords: torch.Tensor, one_hot: torch.Tensor, charges: torch.Tensor):
+def unscale_features(one_hot: torch.Tensor, charges: torch.Tensor):
     """undo the scaling implemented by the paper
 
     Args:
-        coords (torch.Tensor):
         one_hot (torch.Tensor):
         charges (torch.Tensor):
     """
     
-    return coords, 4.0 * one_hot, 10.0 * charges
+    return 4.0 * one_hot, 10.0 * charges
 
 
 #Gradient clipping
@@ -123,3 +122,37 @@ def gradient_clipping(flow: torch.nn.Module, gradnorm_queue: Queue, max: float):
     #     print(f'Clipped gradient with value {grad_norm:.1f} '
     #           f'while allowed {max_grad_norm:.1f}')
     return grad_norm
+
+def gaussian_KL(q_mu: torch.Tensor, q_var: torch.Tensor, p_mu: torch.Tensor, p_var: torch.Tensor):
+    """calculates KL divergence between coordinate-wise univariate Gaussians
+
+    Args:
+        q_mu (torch.Tensor): _description_
+        q_var (torch.Tensor): _description_
+        p_mu (torch.Tensor): _description_
+        p_var (torch.Tensor): _description_
+
+    Returns:
+        torch.Tensor: _description_
+    """
+    return 0.5 * (p_var.log() - q_var.log() + ((q_var + (q_mu - p_mu) ** 2) / p_var) - 1)
+
+def gaussian_KL_batch(q_mu: torch.Tensor, q_var: torch.Tensor, p_mu: torch.Tensor, p_var: torch.Tensor, n_nodes: torch.Tensor, batch_sum: torch.Tensor, subspace=False):
+    """calculates KL divergence between isotropic multivariate Gaussians per batch
+
+    Args:
+        q_mu (torch.Tensor): [N, dims]
+        q_var (torch.Tensor): [B]
+        p_mu (torch.Tensor): [N, dims]
+        p_var (torch.Tensor): [B]
+        n_nodes (torch.Tensor): [B]
+        batch_sum (torch.Tensor): [B, N]
+        subspace (bool): whether we are doing KL in the batch-level zero-mean coordinate subspace. Defaults to False
+
+    Returns:
+        torch.Tensor: _description_
+    """
+    return 0.5 * (((n_nodes - (1. if subspace else 0.)) * q_mu.shape[1]) * (p_var.log() - q_var.log() + (q_var / p_var) - 1) + batch_sum @ ((q_mu - p_mu) ** 2).sum(dim=-1))
+
+def cdf_standard_gaussian(x):
+    return 0.5 * (1. + torch.erf(x / 1.4142135624))
