@@ -10,6 +10,8 @@ class EGCLConfig:
     node_attr_d: int
     edge_attr_d: int
     hidden_d: int
+    use_tanh: bool
+    tanh_range: float
 
 @dataclass
 class EGNNConfig(EGCLConfig):
@@ -95,8 +97,13 @@ class EGCL(nn.Module):
 
         # calculate coord vector output
         # w = phi_x / (d_e + 1)  # [NN, 1]
-        w = phi_x / (torch.clamp(d_e, min=1e-5) + 1)
-        coords_out: torch.Tensor = coords + reduce @ (w * (x_e[:, 0, :] - x_e[:, 1, :]))  # [N, 3]
+        if self.config.use_tanh:
+            w = self.config.tanh_range * torch.tanh(phi_x)
+        else:
+            w = phi_x
+            
+        normalised_coord_differences = (x_e[:, 0, :] - x_e[:, 1, :]) / (torch.clamp(d_e, min=1e-5) + 1)
+        coords_out: torch.Tensor = coords + reduce @ (w * normalised_coord_differences)  # [N, 3]
 
         return coords_out, features_out
 
@@ -107,13 +114,24 @@ class EGNN(nn.Module):
         super().__init__()
         assert config.num_layers > 1
 
+        self.embedding  = nn.Linear(
+            in_features=config.features_d + 1,  # t/T is an additional non-noised feature
+            out_features=config.hidden_d,
+        )
+        self.embedding_out = nn.Linear(
+            in_features=config.hidden_d,
+            out_features=config.features_d + 1,  # again, t/T is an additional non-noised feature
+        )
+        
         self.egc_layers = nn.ModuleList([
             # note: all layers except the first have an additional edge attribute that is equal to the squared coordinate distance at the first layer (page 13)
             EGCL(EGCLConfig(
-                features_d=config.features_d,
-                node_attr_d=config.node_attr_d + 1, # t/T is an additional node attribute
-                edge_attr_d=config.edge_attr_d + (0 if l == 0 else 1), # distance between atoms at layer 0 becomes an additional extra edge attribute for layers 1, 2, ...
-                hidden_d=config.hidden_d)) for l in range(config.num_layers)
+                features_d=config.hidden_d,  # features are already projected into latent space
+                node_attr_d=config.node_attr_d,
+                edge_attr_d=config.edge_attr_d + 1, # distance between atoms at layer 0 becomes an additional extra edge attribute for layers 0, 1, 2, ... note that there is redundancy at layer 0 but we ignore this
+                hidden_d=config.hidden_d,
+                use_tanh=config.use_tanh,
+                tanh_range=config.tanh_range)) for l in range(config.num_layers)
         ])
 
         self.config = config
@@ -123,19 +141,21 @@ class EGNN(nn.Module):
         d_e = (x_e[:, 0, :] - x_e[:, 1, :]).norm(dim=1).unsqueeze(dim=1) # [NN, 1]
 
         coords_out = coords
-        features_out = features
         
         if isinstance(time, float):
-            time = time * torch.ones(size=(coords.shape[0], 1), dtype=coords.dtype, layout=coords.layout, device=coords.device)
-        assert isinstance(time, torch.Tensor)
+            time = time * torch.ones(size=(coords.shape[0], 1), dtype=coords.dtype, layout=coords.layout, device=coords.device)            
+        assert isinstance(time, torch.Tensor)        
         if len(time.shape) == 1:
             time = time[:, None]
+            
+        hidden = self.embedding(torch.cat([features, time], dim=-1))  # put noised features into latent space; t/T is an additional non-noised feature
         
-        node_attr_with_time     = torch.cat([time] + ([node_attr] if node_attr is not None else []), dim=-1)  # type:ignore
         edge_attr_with_distance = torch.cat([d_e ** 2] + ([edge_attr] if edge_attr is not None else []), dim=-1)
 
         for l, egcl in enumerate(self.egc_layers):
             # note: all layers except the first have an additional edge attribute that is equal to the squared coordinate distance at the first layer (page 13)
-            coords_out, features_out = egcl(coords_out, features_out, edges, reduce, node_attr_with_time, edge_attr if l == 0 else edge_attr_with_distance)
+            coords_out, hidden = egcl(coords_out, hidden, edges, reduce, node_attr, edge_attr_with_distance)
+            
+        features_out = self.embedding_out(hidden)[:, :-1]  # put hidden back into ambient space, and cut off the final bit representing t/T
 
         return coords_out, features_out

@@ -24,10 +24,12 @@ parser.add_argument("--wandb-project", default="MLMI4 EDM", type=str, help="wand
 
 parser.add_argument("--dataset", default="qm9", help="which dataset to train on, e.g. 'qm9', 'qm9_no_h'")
     
+parser.add_argument("--no-use-tanh", default=True, action="store_false", dest="use_tanh", help="if specified, do not use tanh after the coord_mlp (if not specified, we use tanh)")
+parser.add_argument("--tanh-range", default=15., type=float, help="if using tanh, what factor we should scale by after applying tanh")
 parser.add_argument("--num-steps", default=1000, type=int, help="number of diffusion steps")
 parser.add_argument("--batch-size", default=64, type=int, help="batch size")
 parser.add_argument("--lr", default=1e-5, type=float, help="learning rate")
-parser.add_argument("--no-clip_grad", default=True, action="store_false", help="specify if you do not want to clip gradients (if not specified, we clip gradients)", dest="clip_grad")
+parser.add_argument("--no-clip_grad", default=True, action="store_false", dest="clip_grad", help="if specified, do not clip gradients (if not specified, we clip gradients)")
 parser.add_argument("--max_grad_norm", default=8., type=float, help="maximum gradient norm to tolerate")
 parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu", type=str, help="torch device to use")
 
@@ -40,6 +42,7 @@ parser.add_argument("--out-dir", default="./checkpoints", type=str, help="output
 parser.add_argument("--extension", default=None, type=str, help="extension to use")
 parser.add_argument("--pipeline", default="train", type=str, help="pipeline", choices=["train", "evaluate"])
 parser.add_argument("--checkpoint", default=None, type=str, help="if specified, load checkpoint located in this folder")
+parser.add_argument("--no-restore-optim-state", default=True, action="store_false", dest="restore_optim_state", help="if specified, do not restore optim state from checkpoint (if not specified, then restores from optim.pth)")
 
 parser.add_argument("--start-epoch", default=0, type=int, help="train epochs in [start-epoch, end-epoch) -- note this is only for bookkeeping and does not affect which model is loaded")
 parser.add_argument("--end-epoch", default=1300, type=int, help="train epochs in [start-epoch, end-epoch)")
