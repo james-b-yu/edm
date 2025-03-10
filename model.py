@@ -16,6 +16,7 @@ class EGCLConfig:
 @dataclass
 class EGNNConfig(EGCLConfig):
     num_layers: int
+    use_resid: bool
     
 def fan_out_init(p: nn.Module, skip: list[nn.Module]):
     if isinstance(p, nn.Linear) and p not in skip:
@@ -157,5 +158,8 @@ class EGNN(nn.Module):
             coords_out, hidden = egcl(coords_out, hidden, edges, reduce, node_attr, edge_attr_with_distance)
             
         features_out = self.embedding_out(hidden)[:, :-1]  # put hidden back into ambient space, and cut off the final bit representing t/T
+        coords_out = demean @ coords_out
+        if self.config.use_resid:
+            coords_out = coords_out - coords
 
         return coords_out, features_out

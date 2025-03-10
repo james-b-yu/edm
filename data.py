@@ -73,7 +73,7 @@ class EDMDataloaderItem:
         self.edges = self.edges.to(*args, **kwargs)
         self.reduce = self.reduce.to(*args, **kwargs)
         self.batch_mean = self.batch_mean.to(*args, **kwargs)
-        self.batch_sum = self.batch_mean.to(*args, **kwargs)
+        self.batch_sum = self.batch_sum.to(*args, **kwargs)
         self.demean = self.demean.to(*args, **kwargs)
         self.expand_idx = self.expand_idx.to(*args, **kwargs)
         self.size_log_probs = self.size_log_probs.to(*args, **kwargs)

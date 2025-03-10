@@ -18,11 +18,13 @@ def one_epoch(args: Namespace, epoch: int, split: Literal["train", "valid", "tes
     dists: list[float] = []
     grad_norms: list[float] = []
     
+    vlbs: list[float] = []
+    
     for idx, data in enumerate(pbar := tqdm(dataloaders[split], leave=False, unit="batch")):
         data: EDMDataloaderItem
         
         data.to_(args.device)        
-        compat_loss, dist = model.calculate_loss(args=args, split="train", data=data)
+        compat_loss, dist = model.calculate_loss(args=args, split=split, data=data)
         
         # pred_eps_coords, pred_eps_features = model.egnn()
         
@@ -62,7 +64,7 @@ def one_epoch(args: Namespace, epoch: int, split: Literal["train", "valid", "tes
             if args.clip_grad:
                 grad_norm = gradient_clipping(model, gradnorm_queue, max=args.max_grad_norm)
         
-        pbar.set_description(f"Total loss: {dist:.2f} Compat loss: {compat_loss:.2f} Grad norm: {grad_norm:.2f}")
+        pbar.set_description(f"({split}) Total loss: {dist:.2f} Compat loss: {compat_loss:.2f} Grad norm: {grad_norm:.2f}")
         
         if wandb_run is not None:
             wandb_run.log({
@@ -78,7 +80,7 @@ def one_epoch(args: Namespace, epoch: int, split: Literal["train", "valid", "tes
     return tuple(sum(l) / len(l) for l in [losses, dists, grad_norms])
     
 
-def enter_train_valid_test_loop(args: Namespace, dataloaders: dict[str, DataLoader], wandb_run: None|Run):
+def enter_train_valid_test_loop(args: Namespace, dataloaders: dict[str, DataLoader], wandb_run: None|Run, no_train=False):
     
     for _, dl in dataloaders.items():
         assert(isinstance(dl.dataset, EDMDataset))
@@ -94,52 +96,66 @@ def enter_train_valid_test_loop(args: Namespace, dataloaders: dict[str, DataLoad
         hidden_d=args.hidden_d,
         num_layers=args.num_layers,
         use_tanh=args.use_tanh,
-        tanh_range=args.tanh_range
-    ), num_steps=args.num_steps, device=args.device)
+        tanh_range=args.tanh_range,
+        use_resid=args.use_resid,
+    ), num_steps=args.num_steps, schedule=args.noise_schedule, device=args.device)
     optim = torch.optim.AdamW(
         model.parameters(),
         lr=args.lr, amsgrad=True,
         weight_decay=1e-12
     )
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer=optim, mode="min", factor=args.scheduler_factor, patience=args.scheduler_patience, threshold=args.scheduler_threshold, threshold_mode="rel", min_lr=args.scheduler_min_lr)
     
     if args.checkpoint is not None:
         print(f"Loading model checkpoints using 'model.pth', 'optim.pth' located in {args.checkpoint}")
         model.load_state_dict(torch.load(path.join(args.checkpoint, "model.pth"), map_location=args.device))
         if args.restore_optim_state:
             optim.load_state_dict(torch.load(path.join(args.checkpoint, "optim.pth"), map_location=args.device))
-        
-        # set potentially new learning rate and rescale moments
-        new_lr = args.lr
-        
-        for param_group in optim.param_groups:
-            param_group['lr'] = new_lr  # Set new LR
-
-        pass
+        if args.restore_scheduler_state:
+            scheduler.load_state_dict(torch.load(path.join(args.checkpoint, "scheduler.pth"), map_location=args.device))        
+        if args.force_start_lr is not None:        
+            for param_group in optim.param_groups:
+                param_group['lr'] = args.force_start_lr
     
     for epoch in tqdm(range(args.start_epoch, args.end_epoch), leave=False, unit="epoch"):
         makedirs(path.join(args.out_dir, args.run_name), exist_ok=True)
         
-        model.train()
-        optim.zero_grad()
-        loss, dist, grad_norm = one_epoch(args, epoch, "train", model, gradnorm_queue, dataloaders, wandb_run)
-        optim.step()
+        train_loss, train_dist, train_grad_norm = 0, 0, 0
         
-        # now save things
-        torch.save(optim.state_dict(), path.join(args.out_dir, args.run_name, "optim.pth"))
-        torch.save(optim.state_dict(), path.join(args.out_dir, args.run_name, f"optim_epoch_{epoch}.pth"))
+        if not no_train:
+            model.train()
+            optim.zero_grad()
+            train_loss, train_dist, train_grad_norm = one_epoch(args, epoch, "train", model, gradnorm_queue, dataloaders, wandb_run)
+            optim.step()
+            scheduler.step(train_loss, epoch)
         
-        torch.save(model.state_dict(), path.join(args.out_dir, args.run_name, "model.pth"))
-        torch.save(model.state_dict(), path.join(args.out_dir, args.run_name, f"model_epoch_{epoch}.pth"))
+        model.eval()
+        with torch.no_grad():
+            valid_vlb, valid_dist, _ = one_epoch(args, epoch, "valid", model, gradnorm_queue, dataloaders, wandb_run)
         
-        with open(path.join(args.out_dir, args.run_name, "args.pkl"), "wb") as f:
-            pickle.dump(args, f)
-        with open(path.join(args.out_dir, args.run_name, f"args_epoch_{epoch}.pkl"), "wb") as f:
-            pickle.dump(args, f)
+        if not no_train:
+            # now save things
+            torch.save(optim.state_dict(), path.join(args.out_dir, args.run_name, "optim.pth"))
+            torch.save(optim.state_dict(), path.join(args.out_dir, args.run_name, f"optim_epoch_{epoch}.pth"))
+            
+            torch.save(scheduler.state_dict(), path.join(args.out_dir, args.run_name, "scheduler.pth"))
+            torch.save(scheduler.state_dict(), path.join(args.out_dir, args.run_name, f"scheduler_epoch_{epoch}.pth"))
+            
+            torch.save(model.state_dict(), path.join(args.out_dir, args.run_name, "model.pth"))
+            torch.save(model.state_dict(), path.join(args.out_dir, args.run_name, f"model_epoch_{epoch}.pth"))
+            
+            with open(path.join(args.out_dir, args.run_name, "args.pkl"), "wb") as f:
+                pickle.dump(args, f)
+            with open(path.join(args.out_dir, args.run_name, f"args_epoch_{epoch}.pkl"), "wb") as f:
+                pickle.dump(args, f)
             
         if wandb_run is not None:
             wandb_run.log({
-                "train_compat_loss": loss,
-                "train_dist": dist,
-                "train_grad_norm": grad_norm,
+                "train_compat_loss": train_loss,
+                "train_dist": train_dist,
+                "train_grad_norm": train_grad_norm,
+                "valid_vlb": valid_vlb,
+                "valid_dist": valid_dist,
+                "lr": optim.param_groups[0]["lr"],
                 "epoch": epoch
             })

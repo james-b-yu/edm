@@ -51,6 +51,44 @@ def cosine_beta_schedule(timesteps, device: torch.device|str, s=0.008):
         "beta_sigma": torch.from_numpy(np.concatenate([betas_transition[0, None], betas_sigma_transition], axis=0).astype(np.float32)).to(device=device),  # copy zeroth element of beta into beta_sigma
     }
     
+def clip_noise_schedule(alphas2, clip_value=0.001):
+    """
+    COPIED FROM https://github.com/ehoogeboom/e3_diffusion_for_molecules/blob/main/equivariant_diffusion/en_diffusion.py#L24
+    For a noise schedule given by alpha^2, this clips alpha_t / alpha_t-1. This may help improve stability during
+    sampling.
+    """
+    alphas2 = np.concatenate([np.ones(1), alphas2], axis=0)
+
+    alphas_step = (alphas2[1:] / alphas2[:-1])
+
+    alphas_step = np.clip(alphas_step, a_min=clip_value, a_max=1.)
+    alphas2 = np.cumprod(alphas_step, axis=0)
+
+    return alphas2    
+
+def polynomial_schedule(timesteps: int, device: torch.device|str, power=2., s=1e-5):
+    """
+    ADAPTED FROM https://github.com/ehoogeboom/e3_diffusion_for_molecules/blob/main/equivariant_diffusion/en_diffusion.py#L39
+    A noise schedule based on a simple polynomial equation: 1 - x^power.
+    """
+    steps = timesteps + 1
+    x = np.linspace(0, steps, steps)
+    alphas2 = (1 - np.power(x / steps, power))**2
+
+    alphas2 = clip_noise_schedule(alphas2, clip_value=0.001)
+
+    precision = 1 - 2 * s
+
+    alphas2 = precision * alphas2 + s
+
+    return {
+        "alpha": torch.from_numpy((alphas2 ** 0.5).astype(np.float32)).to(device=device),
+        "alpha_squared": torch.from_numpy(alphas2.astype(np.float32)).to(device=device),
+        "alpha_L_squared": torch.from_numpy(np.concat([np.array([1], dtype=np.longdouble), alphas2[:-1]]).astype(np.float32)).to(device=device),  # \alpha_{t-1} with artificial 1 at t=0
+        "sigma": torch.from_numpy(((1. - alphas2) ** 0.5).astype(np.float32)).to(device=device),
+        "sigma_squared": torch.from_numpy((1. - alphas2).astype(np.float32)).to(device=device),
+    }
+    
 def scale_features(one_hot: torch.Tensor, charges: torch.Tensor):
     """use the scaling implmeneted by the paper
 

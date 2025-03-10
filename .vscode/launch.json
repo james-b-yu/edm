@@ -5,17 +5,52 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "New Arch Pretrained",
+            "name": "DEBUG PRETRAINED",
             "type": "debugpy",
             "request": "launch",
             "program": "${workspaceFolder}/run.py",
             "console": "integratedTerminal",
             "args": [
                 "--checkpoint",
-                "./checkpoints/new_arch_pretrained",
+                "./checkpoints/new_arch_1em5_lr_w_sch_val/",
                 "--run-name",
-                "debug_new_arch_pretrained",
-                "--no-restore-optim-state",
+                "debug-during-training",
+                "--start-epoch",
+                "640",
+                "--pipeline=valid",
+                "--batch-size=64",
+                "--noise-schedule=polynomial"
+            ]
+        },
+        {
+            "name": "VALID",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/run.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--checkpoint",
+                "./checkpoints/new_arch_lr_with_scheduler/",
+                "--run-name",
+                "new_arch_lr_with_scheduler_and_valid",
+                "--start-epoch",
+                "577"
+            ]
+        },
+        {
+            "name": "Resume New Arch",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/run.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--checkpoint",
+                "./checkpoints/new_arch_lr_1em4/",
+                "--run-name",
+                "new_arch_lr_with_scheduler",
+                "--no-restore-scheduler-state",
+                "--force-start-lr",
+                "5e-5"
             ]
         },
         {
