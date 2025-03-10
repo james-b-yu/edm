@@ -6,10 +6,11 @@ from data import EDMDataloaderItem
 
 @dataclass
 class EGCLConfig:
+    num_layers: int
+    hidden_d: int
     features_d: int
     node_attr_d: int
     edge_attr_d: int
-    hidden_d: int
     use_tanh: bool
     tanh_range: float
 
@@ -128,9 +129,10 @@ class EGNN(nn.Module):
             # note: all layers except the first have an additional edge attribute that is equal to the squared coordinate distance at the first layer (page 13)
             EGCL(EGCLConfig(
                 features_d=config.hidden_d,  # features are already projected into latent space
+                num_layers=config.num_layers,
+                hidden_d=256,  # features are already projected into latent space
                 node_attr_d=config.node_attr_d,
                 edge_attr_d=config.edge_attr_d + 1, # distance between atoms at layer 0 becomes an additional extra edge attribute for layers 0, 1, 2, ... note that there is redundancy at layer 0 but we ignore this
-                hidden_d=config.hidden_d,
                 use_tanh=config.use_tanh,
                 tanh_range=config.tanh_range)) for l in range(config.num_layers)
         ])
