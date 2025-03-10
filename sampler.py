@@ -186,7 +186,7 @@ model = EGNN(dummy_config)
 model.to(device)
 
 # Load trained weights
-model.load_state_dict(torch.load("checkpoint_epoch_44.pth", map_location=device))
+model.load_state_dict(torch.load("./checkpoints/alt_3_trained_edm.pth", map_location=device))
 
 model.eval()
 

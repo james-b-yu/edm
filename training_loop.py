@@ -13,7 +13,7 @@ from utility import collate_fn, gradient_clipping, random_rotation
 from losses import compute_loss_and_nll, compute_loss
 
 
-def train_edm(num_epochs=10, batch_size=64, learning_rate=1e-4, num_steps=1000, checkpoint_interval=1,log_file="alt_3_training_loss.txt"):
+def train_edm(num_epochs=10, batch_size=64, learning_rate=1e-4, num_steps=1000, checkpoint_interval=1,log_file="alt_4_training_loss.txt"):
     
     # Set device
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -23,7 +23,7 @@ def train_edm(num_epochs=10, batch_size=64, learning_rate=1e-4, num_steps=1000, 
     dataset = QM9Dataset(use_h=True, split="train")
 
     # Set seed for reproducibility
-    portion = 1
+    portion = 0.25
     np.random.seed(42)
     subset_indices = np.random.choice(len(dataset), int(portion * len(dataset)), replace=False)
 
@@ -172,8 +172,8 @@ def train_edm(num_epochs=10, batch_size=64, learning_rate=1e-4, num_steps=1000, 
 
         # Save model checkpoint periodically
         if (epoch + 1) % checkpoint_interval == 0:
-            torch.save(model.state_dict(), f"alt_3_checkpoint_epoch_{epoch+1}.pth")
-            print(f"[INFO] Checkpoint saved: alt_3_checkpoint_epoch_{epoch+1}.pth")
+            torch.save(model.state_dict(), f"alt_4_checkpoint_epoch_{epoch+1}.pth")
+            print(f"[INFO] Checkpoint saved: alt_4_checkpoint_epoch_{epoch+1}.pth")
 
     # Final model save
     torch.save(model.state_dict(), "alt_3_trained_edm.pth")
@@ -199,6 +199,7 @@ def validate_edm(batch_size=64, num_steps=1000):
     total_loss = 0.0
     with torch.no_grad():
         for batch_idx, batch in enumerate(dataloader):
+            
             batch = {key: val.to(device) for key, val in batch.items() if isinstance(val, torch.Tensor)}
 
             t = torch.randint(1, num_steps, (batch["n_nodes"].shape[0],), device=device)
@@ -212,10 +213,22 @@ def validate_edm(batch_size=64, num_steps=1000):
                 batch["reduce"], batch["demean"], time_expanded
             )
 
+
+            # NLL loss
+            loss_h = F.nll_loss(predicted_features.view(-1, predicted_features.shape[-1]), batch["features"].view(-1), reduction='mean')
+            loss_x = F.mse_loss(predicted_coords,  batch["coords"])
+            loss = loss_h + loss_x  # Combined loss
+
+            # # Predict noise using model
+            # predicted_coords, predicted_features = model(
+            #     batch["n_nodes"], batch["coords"], batch["features"], batch["edges"],
+            #     batch["reduce"], batch["demean"], time_expanded
+            # )
+
             # Compute validation loss
-            loss_coords = F.mse_loss(predicted_coords, batch["coords"])
-            loss_features = F.mse_loss(predicted_features, batch["features"])
-            loss = loss_coords + loss_features
+            # loss_coords = F.mse_loss(predicted_coords, batch["coords"])
+            # loss_features = F.mse_loss(predicted_features, batch["features"])
+            # loss = loss_coords + loss_features
             total_loss += loss.item()
 
             if batch_idx % 5 == 0:

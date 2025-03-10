@@ -97,9 +97,23 @@ def compute_loss(model, batch, noise_schedule):
         batch["reduce"], batch["demean"], time_expanded
     )
 
-    # Compute MSE loss between predicted noise and actual noise
-    loss_coords = F.mse_loss(predicted_coords, noise_coords, reduction='mean')
-    loss_features = F.mse_loss(predicted_features, noise_features, reduction='mean')
-    loss = loss_coords + loss_features  # Total loss
+    # NLL loss
+    target_labels = batch["features"].argmax(dim=-1)  # Convert one-hot to class indices
+    loss_h = F.nll_loss(
+        predicted_features.view(-1, predicted_features.shape[-1]), 
+        target_labels.view(-1),  
+        reduction='mean'
+    )
 
-    return loss, loss_coords, loss_features
+
+    loss_x = F.mse_loss(predicted_coords,  batch["coords"])
+    # loss = loss_h + loss_x  # Combined loss
+    loss = loss_x + 0.1 * loss_h  # Scale NLL loss down if it's too large
+
+
+    # # Compute MSE loss between predicted noise and actual noise
+    # loss_coords = F.mse_loss(predicted_coords, noise_coords, reduction='mean')
+    # loss_features = F.mse_loss(predicted_features, noise_features, reduction='mean')
+    # loss = loss_coords + loss_features  # Total loss
+
+    return loss, loss_x, loss_h
