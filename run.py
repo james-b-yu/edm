@@ -10,6 +10,7 @@ sys.path.append(".")
 from os import path
 import pickle
 import wandb
+from eval import compute_nll, load_model, load_test_data
 
 from args import args, parser
 from extensions.variance import run
@@ -36,6 +37,6 @@ if __name__ == "__main__":
             name=args.run_name,
             config=vars(args)  
         )
-    
+    1
     if args.extension == "variance":
         run(args, dataloaders, wandb_run)
