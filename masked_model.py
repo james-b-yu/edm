@@ -139,10 +139,10 @@ class MaskedEGNN(nn.Module):
 class MaskedEDM(nn.Module):
     """this is our masked implemention of vanilla EDM
     """
-    def _scale_inputs(self, coord, one_hot, charge):
+    def scale_inputs(self, coord, one_hot, charge):
         s_coord, s_one_hot, s_charge = coord * self.config.coord_in_scale, one_hot * self.config.one_hot_in_scale, charge * self.config.charge_in_scale
         return s_coord, s_one_hot, s_charge
-    def _unscale_inputs(self, s_coord, s_one_hot, s_charge):
+    def unscale_inputs(self, s_coord, s_one_hot, s_charge):
         coord, one_hot, charge = s_coord / self.config.coord_in_scale, s_one_hot / self.config.one_hot_in_scale, s_charge / self.config.charge_in_scale
         return coord, one_hot, charge
     
@@ -153,8 +153,8 @@ class MaskedEDM(nn.Module):
         self.egnn = MaskedEGNN(config=self.config)
         self.to(config.device)
         
-    def forward(self, coord: torch.Tensor, one_hot: torch.Tensor, charge: torch.Tensor, time_int: torch.Tensor | int, node_mask: torch.Tensor, edge_mask: torch.Tensor):
-        s_coord, s_one_hot, s_charge = self._scale_inputs(coord, one_hot, charge)
+    def get_eps_and_predicted_eps(self, coord: torch.Tensor, one_hot: torch.Tensor, charge: torch.Tensor, time_int: torch.Tensor | int, node_mask: torch.Tensor, edge_mask: torch.Tensor):
+        s_coord, s_one_hot, s_charge = self.scale_inputs(coord, one_hot, charge)
         if isinstance(time_int, float):
             time_int = torch.full(fill_value=time_int, size=(s_coord.shape[0], ), dtype=torch.long)
         assert(isinstance(time_int, torch.Tensor) and time_int.dtype == torch.long)
@@ -171,6 +171,6 @@ class MaskedEDM(nn.Module):
         z_feat  = alf * s_feat + sig * eps_feat
         
         time_frac = time_int / self.config.num_steps
-        net_out = self.egnn(z_coord, z_feat, time_frac, node_mask, edge_mask)
+        (pred_eps_coord, pred_eps_feat) = self.egnn(z_coord, z_feat, time_frac, node_mask, edge_mask)
         
-        return net_out
+        return (eps_coord, eps_feat), (pred_eps_coord, pred_eps_feat)
