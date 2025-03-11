@@ -31,7 +31,8 @@ def load_model(checkpoint_path, args_path):
         node_attr_d=args.get("node_attr_d", 0),
         edge_attr_d=args.get("edge_attr_d", 0),
         use_tanh=args.get("use_tanh", True),
-        tanh_range=args.get("tanh_range", 15.0)
+        tanh_range=args.get("tanh_range", 15.0),
+        use_resid=args.get("use_resid", False)
     )
     
     model = EGNN(config)
@@ -113,5 +114,3 @@ if __name__ == "__main__":
     test_data = load_test_data()
     nll = compute_nll(model, test_data)
     print(f"Negative Log-Likelihood (NLL): {nll}")
-
-

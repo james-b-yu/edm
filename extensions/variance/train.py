@@ -159,3 +159,23 @@ def enter_train_valid_test_loop(args: Namespace, dataloaders: dict[str, DataLoad
                 "lr": optim.param_groups[0]["lr"],
                 "epoch": epoch
             })
+            
+            
+def enter_sample(args: Namespace, dataloaders: dict[str, DataLoader], wandb_run: None|Run):
+    for _, dl in dataloaders.items():
+        assert(isinstance(dl.dataset, EDMDataset))
+        features_d = dl.dataset.num_atom_classes + 1
+    
+
+    model = VarianceDiffusion(egnn_config=EGNNConfig(
+        features_d=features_d,
+        node_attr_d=0,
+        edge_attr_d=0,
+        hidden_d=args.hidden_d,
+        num_layers=args.num_layers,
+        use_tanh=args.use_tanh,
+        tanh_range=args.tanh_range,
+        use_resid=args.use_resid,
+    ), num_steps=args.num_steps, schedule=args.noise_schedule, device=args.device)
+
+    model.load_state_dict(torch.load(path.join(args.checkpoint, "model.pth"), map_location=args.device))

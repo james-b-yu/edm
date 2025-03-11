@@ -37,6 +37,6 @@ if __name__ == "__main__":
             name=args.run_name,
             config=vars(args)  
         )
-    1
+    
     if args.extension == "variance":
         run(args, dataloaders, wandb_run)
