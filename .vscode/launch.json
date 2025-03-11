@@ -19,7 +19,8 @@
             "console": "integratedTerminal",
             "args": [
                 "--no-wandb",
-                "--pipeline=demo"
+                "--pipeline=demo",
+                "--checkpoint=arch"
             ]
         },
         {
