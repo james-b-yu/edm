@@ -57,6 +57,7 @@ parser.add_argument("--start-epoch", default=0, type=int, help="train epochs in 
 parser.add_argument("--end-epoch", default=1300, type=int, help="train epochs in [start-epoch, end-epoch)")
 
 parser.add_argument("--data-dir", default="./data", type=str, help="directory in which datasets are stored")
+parser.add_argument("--original-data-dir", default="./orig_data", type=str, help="directory in which original repo's datasets are stored")
 parser.add_argument("--qm9-data-url", default="https://springernature.figshare.com/ndownloader/files/3195389", type=str, help="url from which to retrieve the raw xyz.tar.bz2 dataset")
 parser.add_argument("--qm9-excluded-url", default="https://springernature.figshare.com/ndownloader/files/3195404", type=str, help="url from which to retrieve the excluded.txt file")
 parser.add_argument("--qm9-atomref-url", default="https://springernature.figshare.com/ndownloader/files/3195395", type=str, help="url from which to retrieve the atomref.txt file")
