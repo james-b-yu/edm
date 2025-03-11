@@ -12,6 +12,17 @@
             "console": "integratedTerminal"
         },
         {
+            "name": "DEBUG DEMO",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/run.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--no-wandb",
+                "--pipeline=demo"
+            ]
+        },
+        {
             "name": "DEBUG PRETRAINED",
             "type": "debugpy",
             "request": "launch",

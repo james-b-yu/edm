@@ -11,13 +11,25 @@ from os import path
 from multiprocessing import cpu_count
 
 from args import args
+from utils.diffusion import demean_using_mask
 from utils.files import check_hash_file, hash_file
 from utils.qm9 import charge_to_idx, ensure_qm9_raw_data, ensure_qm9_raw_excluded, ensure_qm9_raw_splits, ensure_qm9_raw_thermo, ensure_qm9_processed
 
 from qm9_meta import QM9_WITH_H, QM9_WITHOUT_H
 
 QM9Attributes = Literal["index", "A", "B", "C", "mu", "alpha", "homo", "lumo", "gap", "r2", "zpve", "U0", "U", "H", "G", "Cv", "omega1", "zpve_thermo", "U0_thermo", "U_thermo", "H_thermo", "G_thermo", "Cv_thermo"]
-QM9ProcessedData = dict[Literal["num_atoms", "classes", "charges", "positions", "positions_demeaned", "one_hot", QM9Attributes], torch.Tensor]
+QM9ProcessedData = dict[str | Literal["num_atoms", "classes", "charges", "positions", "one_hot", QM9Attributes], torch.Tensor]
+class QM9ProcessedDataClass:
+    def __init__(self, data: QM9ProcessedData):
+        self._data = data
+    def __getitem__(self, key: str):
+        return self._data[key]
+    def __setitem__(self, key: str, val):
+        self._data[key] = val
+    def _to(self, *args, **kwargs):
+        for key, val in self._data.items():
+            if isinstance(val, torch.Tensor):
+                self._data[key] = val.to(*args, **kwargs)
 
 class QM9MaskedDataset(td.Dataset):
     def __init__(self, use_h: bool, split: Literal["train", "valid", "test"]):
@@ -30,15 +42,15 @@ class QM9MaskedDataset(td.Dataset):
         self.split = split
         self.use_h = use_h
         
-        self._atom_types = torch.tensor([1,6,7,8,9], dtype=torch.long)
-        self._num_atom_types = torch.tensor(5, dtype=torch.long)
+        self.atom_types = torch.tensor([1,6,7,8,9], dtype=torch.long)
+        self.num_atom_types = torch.tensor(5, dtype=torch.long)
         
         if not use_h:
             raise NotImplementedError  # XXX: implement no hydrogens
         
         self._processed_path = path.join(args.original_data_dir, "qm9", f"{split}.npz")        
         self._data: QM9ProcessedData = {key: torch.from_numpy(val) for key, val in np.load(self._processed_path).items()}
-        self._data["one_hot"] = self._data["charges"][:,:,None] == self._atom_types
+        self._data["one_hot"] = self._data["charges"][:,:,None] == self.atom_types
         self._len  = len(self._data["num_atoms"])
 
     def __len__(self) -> int:
@@ -46,10 +58,6 @@ class QM9MaskedDataset(td.Dataset):
     
     def __getitem__(self, index) -> QM9ProcessedData:
         processed_data: QM9ProcessedData = {key: val[index] for key, val in self._data.items()}
-        # demean the atom positions
-        processed_data["positions_demeaned"] = processed_data["positions"]
-        n = processed_data["num_atoms"]
-        processed_data["positions_demeaned"][:n] = processed_data["positions_demeaned"][:n] - processed_data["positions_demeaned"][:n].mean(dim=0)
         return processed_data
 
 def _collate_fn(data: list[QM9ProcessedData]):
@@ -82,11 +90,15 @@ def _collate_fn(data: list[QM9ProcessedData]):
     edge_mask *= ~torch.eye(max_n_atoms, dtype=torch.bool)[None]
     stacked_data["edge_mask"] = edge_mask.flatten(start_dim=1)  # flatten and add extra dim
     
-    # finally, add another dimension to the charges
+    # add another dimension to the charges
     stacked_data["charges"] = stacked_data["charges"][:, :, None]
     
-    return stacked_data
+    # finally, demean the atom positions
+    stacked_data["positions"] = demean_using_mask(stacked_data["positions"], stacked_data["node_mask"])
+    stacked_data["batch_size"] = stacked_data["positions"].shape[0]
+    
+    return QM9ProcessedDataClass(stacked_data)
 
 
-def get_masked_qm9_dataloader(use_h: bool, split: Literal["train", "valid", "test"], batch_size: int, prefetch_factor: int|None=4, num_workers = 0 if cpu_count() < 4 else int(0.5 * cpu_count()), pin_memory=True, shuffle=True):
+def get_masked_qm9_dataloader(use_h: bool, split: Literal["train", "valid", "test"], batch_size: int, prefetch_factor: int|None=None, num_workers=0, pin_memory=True, shuffle=True):
     return td.DataLoader(dataset=QM9MaskedDataset(use_h=use_h, split=split), batch_size=batch_size, collate_fn=_collate_fn, pin_memory=pin_memory, prefetch_factor=prefetch_factor, num_workers=num_workers, shuffle=shuffle)

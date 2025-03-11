@@ -1,3 +1,4 @@
+from argparse import Namespace
 from dataclasses import dataclass
 from typing import Literal
 import torch
@@ -174,3 +175,16 @@ class MaskedEDM(nn.Module):
         (pred_eps_coord, pred_eps_feat) = self.egnn(z_coord, z_feat, time_frac, node_mask, edge_mask)
         
         return (eps_coord, eps_feat), (pred_eps_coord, pred_eps_feat)
+    
+def get_config_from_args(args: Namespace, num_atom_types: int):
+    return MaskedEDMConfig(
+        device=args.device,
+        hidden_dim=args.hidden_d,
+        tanh_multiplier=args.tanh_range,
+        num_layers=args.num_layers,
+        num_atom_types=num_atom_types,  # type:ignore
+        num_steps=args.num_steps,
+        schedule_type=args.noise_schedule,
+        coord_in_scale=1.,
+        one_hot_in_scale=0.25,
+        charge_in_scale=0.1)

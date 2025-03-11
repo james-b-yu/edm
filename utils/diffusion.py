@@ -203,7 +203,6 @@ def demean_using_mask(x: torch.Tensor, node_mask: torch.Tensor):
         x (torch.Tensor): coordinates, noised coordinates, predicted coordinates, etc.
         node_mask (torch.Tensor): node_mask
     """
-    # XXX: taken from the paper, but this demeans batch-wise rather than atom-wise
     mean = x.sum(dim=1, keepdim=True) / node_mask.sum(dim=1, keepdim=True)
     return x - mean * node_mask
 
