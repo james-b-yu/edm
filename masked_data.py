@@ -17,7 +17,7 @@ from utils.qm9 import charge_to_idx, ensure_qm9_raw_data, ensure_qm9_raw_exclude
 from qm9_meta import QM9_WITH_H, QM9_WITHOUT_H
 
 QM9Attributes = Literal["index", "A", "B", "C", "mu", "alpha", "homo", "lumo", "gap", "r2", "zpve", "U0", "U", "H", "G", "Cv", "omega1", "zpve_thermo", "U0_thermo", "U_thermo", "H_thermo", "G_thermo", "Cv_thermo"]
-QM9ProcessedData = dict[Literal["num_atoms", "classes", "charges", "positions", "one_hot", QM9Attributes], torch.Tensor]
+QM9ProcessedData = dict[Literal["num_atoms", "classes", "charges", "positions", "positions_demeaned", "one_hot", QM9Attributes], torch.Tensor]
 
 class QM9MaskedDataset(td.Dataset):
     def __init__(self, use_h: bool, split: Literal["train", "valid", "test"]):
@@ -45,7 +45,12 @@ class QM9MaskedDataset(td.Dataset):
         return self._len
     
     def __getitem__(self, index) -> QM9ProcessedData:
-        return {key: val[index] for key, val in self._data.items()}
+        processed_data: QM9ProcessedData = {key: val[index] for key, val in self._data.items()}
+        # demean the atom positions
+        processed_data["positions_demeaned"] = processed_data["positions"]
+        n = processed_data["num_atoms"]
+        processed_data["positions_demeaned"][:n] = processed_data["positions_demeaned"][:n] - processed_data["positions_demeaned"][:n].mean(dim=0)
+        return processed_data
 
 def _collate_fn(data: list[QM9ProcessedData]):
     keys = data[0].keys()
@@ -66,15 +71,16 @@ def _collate_fn(data: list[QM9ProcessedData]):
             stacked_data[key] = stacked_data[key][:, dims_to_keep]
             
     # indicate where atoms are located
-    # [B, N] where B is batch size and N is size of largest molecule; atom_mask[i, j] == True if and only if the jth atom of the ith molecule is present
-    atom_mask = stacked_data["atom_mask"] = stacked_data["charges"] > 0 
-    batch_size, max_n_atoms = atom_mask.shape
+    # [B, N] where B is batch size and N is size of largest molecule; node_mask[i, j] == True if and only if the jth atom of the ith molecule is present
+    node_mask = stacked_data["charges"] > 0 
+    stacked_data["node_mask"] = node_mask[:, :, None]
+    batch_size, max_n_atoms = node_mask.shape
     
     # indicate where edges are located
     # [B, N, N] where edge_mask[i, j, k] == True if and only if there is an edge between the j and kth positions of molecule i. no edge between an atom and itself. no edge for atoms that are not present. 
-    edge_mask = atom_mask[:, None, :] * atom_mask[:, :, None]
+    edge_mask = node_mask[:, None, :] * node_mask[:, :, None]
     edge_mask *= ~torch.eye(max_n_atoms, dtype=torch.bool)[None]
-    stacked_data["edge_mask"] = edge_mask.flatten()[:, None]  # flatten and add extra dim
+    stacked_data["edge_mask"] = edge_mask.flatten(start_dim=1)  # flatten and add extra dim
     
     # finally, add another dimension to the charges
     stacked_data["charges"] = stacked_data["charges"][:, :, None]

@@ -1,3 +1,4 @@
+from functools import cache
 import torch
 import numpy as np
 from math import log
@@ -194,3 +195,57 @@ def gaussian_KL_batch(q_mu: torch.Tensor, q_var: torch.Tensor, p_mu: torch.Tenso
 
 def cdf_standard_gaussian(x):
     return 0.5 * (1. + torch.erf(x / 1.4142135624))
+
+def demean_using_mask(x: torch.Tensor, node_mask: torch.Tensor):
+    """x corresponds to coordinates. demean using node_mask
+
+    Args:
+        x (torch.Tensor): coordinates, noised coordinates, predicted coordinates, etc.
+        node_mask (torch.Tensor): node_mask
+    """
+    # XXX: taken from the paper, but this demeans batch-wise rather than atom-wise
+    mean = x.sum(dim=1, keepdim=True) / node_mask.sum(dim=1, keepdim=True)
+    return x - mean * node_mask
+
+@cache
+def get_batch_edge_idx(max_num_nodes: int, batch_size: int, device: str):
+    """returns two lists a and b, for each i, there exists and edge between a[i] and b[i] in the batched fully connected graph
+
+    Args:
+        max_num_nodes (int): largest atom in the batch
+        batch_size (int): batch size
+    """
+    rows = []
+    cols = []
+    
+    for b in range(batch_size):
+        for i in range(max_num_nodes):
+            for j in range(max_num_nodes):
+                rows.append(i + b * max_num_nodes)
+                cols.append(j + b * max_num_nodes)
+    
+    rows = torch.tensor(rows, dtype=torch.long, device=device)
+    cols = torch.tensor(cols, dtype=torch.long, device=device)
+    
+    return rows, cols
+
+def get_coord_distance(z_coord: torch.Tensor, edge_idx: tuple[torch.Tensor, torch.Tensor]):
+    """given coords and edge indices, return distances between every coord connected in the graph
+
+    Args:
+        z_coord (torch.Tensor): _description_
+        edge_idx (torch.Tensor): _description_
+    """
+    
+    row, col = edge_idx
+    diff = z_coord[row] - z_coord[col]
+    squared_distance = (diff ** 2).sum(dim=-1, keepdim=True)
+    normed_difference = diff / (1 + (squared_distance + 1e-8).sqrt())
+    
+    return squared_distance, normed_difference
+
+def unsorted_segment_sum(data: torch.Tensor, segment_idx: torch.Tensor, num_segments: int):
+    res = data.new_zeros(size=(num_segments, data.shape[1]))
+    segment_idx = segment_idx[:, None].expand(-1, data.shape[1])
+    res.scatter_add_(0, segment_idx, data)
+    return res

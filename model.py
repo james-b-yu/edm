@@ -97,6 +97,8 @@ class EGCL(nn.Module):
         node_mlp_in = torch.cat([features, reduce @ (phi_e * self.inf_mlp(phi_e))] + ([node_attr] if node_attr is not None else []), dim=-1)
         features_out: torch.Tensor = features + self.node_mlp(node_mlp_in)  # [N, features_d]
 
+        # TODO: FIX THE ORDERING OF THIS!!! coord_mlp should go last and use features_out as the input
+
         # calculate coord vector output
         # w = phi_x / (d_e + 1)  # [NN, 1]
         if self.config.use_tanh:
