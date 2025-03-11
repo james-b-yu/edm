@@ -28,7 +28,7 @@ class MaskedEGCL(nn.Module):
     def __init__(self, config: MaskedEGCLConfig):
         super().__init__()
         self.config = config
-        torch.manual_seed(0)  # TODO: REMOVE
+
         # the \(\phi_{e}\) network for edge operation
         self.edge_mlp = nn.Sequential(
             #            hi               hj            dij2       aij
@@ -49,7 +49,6 @@ class MaskedEGCL(nn.Module):
             nn.Sigmoid()
         )
         # the \(\phi_{x}\) network for coordinate update (same architecture as above but we have an additional projection onto a scalar)
-        torch.manual_seed(0)  # TODO: REMOVE
         coord_mlp_final_layer = nn.Linear(config.hidden_dim, 1, bias=False)
         torch.nn.init.xavier_uniform_(coord_mlp_final_layer.weight, gain=0.001)
         self.coord_mlp = nn.Sequential(
@@ -93,10 +92,8 @@ class MaskedEGNN(nn.Module):
     def __init__(self, config: MaskedEGNNConfig):
         super().__init__()
         self.config = config
-        
-        torch.manual_seed(0)  # TODO: REMOVE
+
         self.embedding = nn.Linear(config.num_atom_types + 2, config.hidden_dim)  # features are cat(one_hot, charge, t/T), so we add 2 additional dims
-        torch.manual_seed(0)  # TODO: REMOVE
         self.embedding_out = nn.Linear(config.hidden_dim, config.num_atom_types + 2)
         self.egcls = nn.ModuleList([
             MaskedEGCL(config) for l in range(config.num_layers)
@@ -166,9 +163,7 @@ class MaskedEDM(nn.Module):
         sig = self.schedule["sigma"][time_int][:, None, None]
         
         s_feat = torch.cat([s_one_hot, s_charge], dim=-1)
-        torch.manual_seed(0)  # TODO: REMOVE
         eps_feat = torch.randn_like(s_feat) * node_mask
-        torch.manual_seed(0)  # TODO: REMOVE
         x_masked = torch.randn_like(s_coord) * node_mask
         eps_coord   = demean_using_mask(x_masked, node_mask)
 
