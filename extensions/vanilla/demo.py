@@ -6,11 +6,13 @@ from os import path
 
 from masked_model import MaskedEDM, get_config_from_args
 
+@torch.no_grad()
 def do_demo(args: Namespace, dl: DataLoader):
     print("This is a demo run which calculates mean-squared error on the validation (not test!) dataset")
     config = get_config_from_args(args, dl.dataset.num_atom_types)  # type:ignore
     model = MaskedEDM(config)
     model.load_state_dict(torch.load(path.join(args.out_dir, args.checkpoint, "model.pth")))
+    model.eval()
     
     for idx, data in enumerate(pbar := tqdm(dl)):
         data._to(dtype=torch.float32, device=args.device)
