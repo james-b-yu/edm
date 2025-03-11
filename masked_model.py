@@ -121,29 +121,35 @@ class MaskedEGNN(nn.Module):
         # finally, concat together features and time fraction. XXX: if we want to do conditional generation, then we add the context here
         z_feat = torch.cat([z_feat, time_frac], dim=-1)
         
-        
+        # project features into high-dimensional latent space
         h_feat = self.embedding(z_feat)  # TODO: should we mask this again?
         z_squared_coord_dist, _ = get_coord_distance(z_coord, edge_idx)
         
+        # propage through equivariant graph convolutional layers
         for l in range(self.config.num_layers):
             z_coord, h_feat = self.egcls[l](coord=z_coord, feat=h_feat, edge_idx=edge_idx, node_mask=node_mask, edge_mask=edge_mask, squared_z_coord_distances=z_squared_coord_dist)
         
+        # unflatten predictions for (epsilons of) coordinates and features
         node_mask = node_mask.view(batch_size, max_num_atoms, -1)
         out_coord = z_coord - z_coord_in
         out_coord = out_coord.view(batch_size, max_num_atoms, -1)  # unflatten coordinates
         out_coord = demean_using_mask(out_coord, node_mask)
         
-        out_feat = self.embedding_out(h_feat)  # we multiply again by node_mask since the bias term may be non-zero
-        out_feat = out_feat[:, :-1].view(batch_size, max_num_atoms, -1) * node_mask
+        out_feat = self.embedding_out(h_feat)
+        out_feat = out_feat[:, :-1].view(batch_size, max_num_atoms, -1) * node_mask  # we multiply again by node_mask since the bias term of embedding_out may be non-zero. but this is redundant if we never look at values corresponding to padding indices
         return out_coord, out_feat
 
 class MaskedEDM(nn.Module):
     """this is our masked implemention of vanilla EDM
     """
     def scale_inputs(self, coord, one_hot, charge):
+        """given inputs, scale them to prepare for inputs according to config
+        """
         s_coord, s_one_hot, s_charge = coord * self.config.coord_in_scale, one_hot * self.config.one_hot_in_scale, charge * self.config.charge_in_scale
         return s_coord, s_one_hot, s_charge
     def unscale_inputs(self, s_coord, s_one_hot, s_charge):
+        """given scaled values, unscale them to prepare for outputs according to config
+        """
         coord, one_hot, charge = s_coord / self.config.coord_in_scale, s_one_hot / self.config.one_hot_in_scale, s_charge / self.config.charge_in_scale
         return coord, one_hot, charge
     
@@ -155,6 +161,21 @@ class MaskedEDM(nn.Module):
         self.to(config.device)
         
     def get_eps_and_predicted_eps(self, coord: torch.Tensor, one_hot: torch.Tensor, charge: torch.Tensor, time_int: torch.Tensor | int, node_mask: torch.Tensor, edge_mask: torch.Tensor):
+        """
+        this method is useful during training and evaluation
+        given ground truth data, and (potentially random) time generate epsilons and perform one evaluation of the model to predict these epsilons
+
+        Args:
+            coord (torch.Tensor): self-explanatory
+            one_hot (torch.Tensor): self-explanatory
+            charge (torch.Tensor): self-explanatory
+            time_int (torch.Tensor | int): either an integer, in which case all molecules in the batch will have the same time step, or a long-tensor of shape [batch_size]. note this is an INTEGER from 0 to num_steps, inclusive
+            node_mask (torch.Tensor): get these from the dataloader
+            edge_mask (torch.Tensor): get these from the dataloader
+
+        Returns:
+            tuple[tuple[torch.Tensor, torch.Tensor], tuple[torch.Tensor, torch.Tensor]]: actual and predicted epsilons, ready to calculate squared difference norm or mse, etc.
+        """
         s_coord, s_one_hot, s_charge = self.scale_inputs(coord, one_hot, charge)
         if isinstance(time_int, float):
             time_int = torch.full(fill_value=time_int, size=(s_coord.shape[0], ), dtype=torch.long)
@@ -164,7 +185,9 @@ class MaskedEDM(nn.Module):
         sig = self.schedule["sigma"][time_int][:, None, None]
         
         s_feat = torch.cat([s_one_hot, s_charge], dim=-1)
+        
         eps_feat = torch.randn_like(s_feat) * node_mask
+        
         x_masked = torch.randn_like(s_coord) * node_mask
         eps_coord   = demean_using_mask(x_masked, node_mask)
 
@@ -173,7 +196,7 @@ class MaskedEDM(nn.Module):
         
         time_frac = time_int / self.config.num_steps
         (pred_eps_coord, pred_eps_feat) = self.egnn(z_coord, z_feat, time_frac, node_mask, edge_mask)
-        
+    
         return (eps_coord, eps_feat), (pred_eps_coord, pred_eps_feat)
     
 def get_config_from_args(args: Namespace, num_atom_types: int):
