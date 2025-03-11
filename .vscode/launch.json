@@ -5,6 +5,13 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "playground.py",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/playground.py",
+            "console": "integratedTerminal"
+        },
+        {
             "name": "DEBUG PRETRAINED",
             "type": "debugpy",
             "request": "launch",
