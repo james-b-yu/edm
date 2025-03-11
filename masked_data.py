@@ -100,5 +100,7 @@ def _collate_fn(data: list[QM9ProcessedData]):
     return QM9ProcessedDataClass(stacked_data)
 
 
-def get_masked_qm9_dataloader(use_h: bool, split: Literal["train", "valid", "test"], batch_size: int, prefetch_factor: int|None=None, num_workers=0, pin_memory=True, shuffle=True):
+def get_masked_qm9_dataloader(use_h: bool, split: Literal["train", "valid", "test"], batch_size: int, prefetch_factor: int|None=None, num_workers=0, pin_memory=True, shuffle:bool|None=None):
+    if shuffle is None:
+        shuffle = split == "train"
     return td.DataLoader(dataset=QM9MaskedDataset(use_h=use_h, split=split), batch_size=batch_size, collate_fn=_collate_fn, pin_memory=pin_memory, prefetch_factor=prefetch_factor, num_workers=num_workers, shuffle=shuffle)
