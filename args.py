@@ -23,7 +23,7 @@ parser.add_argument("--wandb-project", default="MLMI4 EDM", type=str, help="wand
 
 
 parser.add_argument("--dataset", default="qm9", help="which dataset to train on, e.g. 'qm9', 'qm9_no_h'")
-parser.add_argument("--noise-schedule", default="cosine", type=str, help="which noising schedule to use", choices=["cosine", "polynomial"])
+parser.add_argument("--noise-schedule", default="polynomial", type=str, help="which noising schedule to use", choices=["cosine", "polynomial"])
 parser.add_argument("--use-resid", default=False, action="store_true", help="specify egnn learns residual of residual")
 parser.add_argument("--tanh-range", default=15., type=float, help="if using tanh, what factor we should scale by after applying tanh")
 parser.add_argument("--num-steps", default=1000, type=int, help="number of diffusion steps")
