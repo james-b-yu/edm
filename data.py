@@ -97,15 +97,16 @@ class EDMDataloaderItem:
         return self.coord
 
 QM9Attributes = Literal["index", "A", "B", "C", "mu", "alpha", "homo", "lumo", "gap", "r2", "zpve", "U0", "U", "H", "G", "Cv", "omega1", "zpve_thermo", "U0_thermo", "U_thermo", "H_thermo", "G_thermo", "Cv_thermo"]
-QM9ProcessedData = dict[Literal["num_atoms", "classes", "charges", "positions", QM9Attributes], torch.Tensor]
+QM9ProcessedData = dict[Literal["num_atoms", "classes", "charges", "positions", "one_hot", QM9Attributes], torch.Tensor]
 
 class EDMDataset(ABC, td.Dataset):
-    def __init__(self, num_atom_types, max_nodes, size_histogram):
+    def __init__(self, num_atom_types, max_nodes, atom_types, size_histogram):
         """initialise EDM dataset
 
         Args:
             num_atom_types (int): number of data features
             max_nodes (int): maximum number of atoms per molecule
+            atom_types (list[int]): list of atom charges that appear in the dataset (sort this ascending)
             size_histogram (dict[int, int]|None): count of molecule sizes
         """
         super().__init__()
@@ -114,6 +115,7 @@ class EDMDataset(ABC, td.Dataset):
         self.num_atom_types = num_atom_types
         self.max_nodes = max_nodes
         self.size_histogram = size_histogram
+        self.atom_types = torch.tensor(atom_types, dtype=torch.long)
         
         hist_norm = sum(size_histogram.values())
         self.log_size_histogram_probs = {key: log((val / hist_norm) + 1e-30) for key, val in size_histogram.items()}
@@ -128,13 +130,17 @@ class EDMDataset(ABC, td.Dataset):
 
 class QM9Dataset(EDMDataset):
     def __init__(self, use_h: bool, split: Literal["train", "valid", "test"]):
-        super().__init__(num_atom_types=QM9_WITH_H["num_atom_types"] if use_h else QM9_WITHOUT_H["num_atom_types"], max_nodes=QM9_WITH_H["largest_molecule_size"] if use_h else QM9_WITHOUT_H["largest_molecule_size"], size_histogram=QM9_WITH_H["molecule_size_histogram"] if use_h else QM9_WITHOUT_H["molecule_size_histogram"])
+        super().__init__(
+            num_atom_types=QM9_WITH_H["num_atom_types"] if use_h else QM9_WITHOUT_H["num_atom_types"],
+            max_nodes=QM9_WITH_H["largest_molecule_size"] if use_h else QM9_WITHOUT_H["largest_molecule_size"],
+            atom_types=QM9_WITH_H["atom_types"] if use_h else QM9_WITHOUT_H["atom_types"],
+            size_histogram=QM9_WITH_H["molecule_size_histogram"] if use_h else QM9_WITHOUT_H["molecule_size_histogram"]
+        )
         
         assert split in ["train", "valid", "test"]
         
         self.split = split
         self.use_h = use_h
-        self.atom_types = torch.tensor([1,6,7,8,9], dtype=torch.long) if use_h else torch.tensor([6,7,8,9], dtype=torch.long)
         
         processed_filename = f"{split}_{"h" if use_h else "no_h"}"
         self._processed_path = path.join(args.data_dir, "qm9", f"{processed_filename}.npz")
@@ -142,6 +148,7 @@ class QM9Dataset(EDMDataset):
             ensure_qm9_processed(path.join(args.data_dir, "qm9"), use_h)
         
         self._data: QM9ProcessedData = {key: torch.from_numpy(val) for key, val in np.load(self._processed_path).items()}
+        self._data["one_hot"] = self._data["charges"][:,:,None] == self.atom_types
         self._len  = len(self._data["num_atoms"])
 
     def __len__(self) -> int:
@@ -151,8 +158,8 @@ class QM9Dataset(EDMDataset):
         n_nodes = self._data["num_atoms"][index]
         coords = self._data["positions"][index, :n_nodes]
         charges = self._data["charges"][index, :n_nodes]
+        one_hot = self._data["one_hot"][index, :n_nodes]
         size_log_prob = self.log_size_histogram_probs[int(n_nodes)]
-        one_hot = charges[:, None] == self.atom_types
         
         return EDMDatasetItem(
             n_nodes = int(n_nodes),
@@ -161,34 +168,6 @@ class QM9Dataset(EDMDataset):
             one_hot = one_hot,
             size_log_prob = size_log_prob
         )
-
-class DummyDataset(EDMDataset):
-    """Dummy dataset
-    """
-    def __init__(self, len=10000, num_atom_types=7, max_nodes=25):
-        super().__init__(num_atom_types, max_nodes, {n: 1 for n in range(1, max_nodes + 1)})
-        self.len = len
-        self.rng = torch.random
-
-    def __len__(self):
-        return self.len
-
-    def __getitem__(self, index) -> EDMDatasetItem:
-        """
-        Args:
-            index (int): the index
-
-        Returns:
-            dict[str, Any]: returns a dict containing "coords" and "n_nodes"
-        """
-        n_nodes = int(torch.randint(low=2, high=self.max_nodes + 1, size=(), dtype=torch.int64))
-        coords = torch.randn((n_nodes, 3), dtype=torch.float32)
-        charges = 1 + torch.randint(low=0, high=self.num_atom_types, size=(n_nodes,), dtype=torch.int64)
-        one_hot = torch.eye(self.num_atom_types, dtype=torch.float32)[charges - 1]
-        size_log_prob = - log(self.max_nodes)
-        
-
-        return EDMDatasetItem(n_nodes=n_nodes, coords=coords, one_hot=one_hot, charges=charges, size_log_prob=size_log_prob)
 
 def _collate_fn(data: list[EDMDatasetItem]):
         n_nodes = torch.tensor([d.n_nodes for d in data], dtype=torch.int64)
@@ -209,8 +188,6 @@ def _collate_fn(data: list[EDMDatasetItem]):
 
         return EDMDataloaderItem(n_nodes=n_nodes, coord=coords, one_hot=one_hot, charge=charges, edges=edges, reduce=reduce, batch_mean=batch_mean, batch_sum=batch_sum, demean=demean, expand_idx=expand_idx, size_log_probs=size_log_probs)
 
-def get_dummy_dataloader(num_atom_types: int, len: int, max_nodes: int, batch_size: int):
-    return td.DataLoader(dataset=DummyDataset(num_atom_types=num_atom_types, max_nodes=max_nodes, len=len), batch_size=batch_size, collate_fn=_collate_fn)
 
 def get_qm9_dataloader(use_h: bool, split: Literal["train", "valid", "test"], batch_size: int, prefetch_factor: int|None=None, num_workers = 0, pin_memory=True, shuffle:bool|None=True):
     if shuffle is None:

@@ -1,4 +1,5 @@
 QM9_WITH_H = {
+    "atom_types": [1,6,7,8,9],
     "num_atom_types": 5,
     "largest_molecule_size": 29,
     "molecule_size_histogram": {22: 3393, 17: 13025, 23: 4848, 21: 9970, 19: 13832, 20: 9482, 16: 10644, 13: 3060,
@@ -7,6 +8,7 @@ QM9_WITH_H = {
 }
 
 QM9_WITHOUT_H = {
+    "atom_types": [6,7,8,9],
     "num_atom_types": 4,
     "largest_molecule_size": 9,
     "molecule_size_histogram": {9: 83366, 8: 13625, 7: 2404, 6: 475, 5: 91, 4: 25, 3: 7, 1: 2, 2: 5}
