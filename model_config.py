@@ -17,7 +17,7 @@ class EGNNConfig(EGCLConfig):
     num_layers: int = 9
 
 @dataclass
-class EDMConfig(EGNNConfig):  # TODO: remove these defaults
+class EDMConfig(EGNNConfig):
     coord_in_scale: float = 1.
     one_hot_in_scale: float = 0.25
     charge_in_scale: float = 0.1
