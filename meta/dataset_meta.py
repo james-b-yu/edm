@@ -68,16 +68,16 @@ GEOM_WITHOUT_H = {
 }
 
 
-def get_dataset_info(dataset_name, remove_h):
+def get_dataset_info(dataset_name, use_h=True):
     if dataset_name == 'qm9':
-        if not remove_h:
+        if use_h:
             return QM9_WITH_H
         else:
             return QM9_WITHOUT_H
     elif dataset_name == 'geom':
-        if not remove_h:
+        if use_h:
             return GEOM_WITH_H
         else:
             return GEOM_WITHOUT_H
     else:
-        raise Exception("Wrong dataset %s" % dataset_name)
+        raise Exception(f"Wrong dataset {dataset_name}")

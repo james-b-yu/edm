@@ -2,7 +2,7 @@
 # http://www.wiredchemist.com/chemistry/data/bond_energies_lengths.html
 # And:
 # http://chemistry-reference.com/tables/Bond%20Lengths%20and%20Enthalpies.pdf
-bonds1 = {'H': {'H': 74, 'C': 109, 'N': 101, 'O': 96, 'F': 92,
+BONDS_1 = {'H': {'H': 74, 'C': 109, 'N': 101, 'O': 96, 'F': 92,
                 'B': 119, 'Si': 148, 'P': 144, 'As': 152, 'S': 134,
                 'Cl': 127, 'Br': 141, 'I': 161},
           'C': {'H': 109, 'C': 154, 'N': 147, 'O': 143, 'F': 135,
@@ -34,63 +34,20 @@ bonds1 = {'H': {'H': 74, 'C': 109, 'N': 101, 'O': 96, 'F': 92,
           'As': {'H': 152}
           }
 
-bonds2 = {'C': {'C': 134, 'N': 129, 'O': 120, 'S': 160},
+BONDS_2 = {'C': {'C': 134, 'N': 129, 'O': 120, 'S': 160},
           'N': {'C': 129, 'N': 125, 'O': 121},
           'O': {'C': 120, 'N': 121, 'O': 121, 'P': 150},
           'P': {'O': 150, 'S': 186},
           'S': {'P': 186}}
 
 
-bonds3 = {'C': {'C': 120, 'N': 116, 'O': 113},
+BONDS_3 = {'C': {'C': 120, 'N': 116, 'O': 113},
           'N': {'C': 116, 'N': 110},
           'O': {'C': 113}}
+          
+BONDS_PER_TYPE = {1 : BONDS_1,
+                  2 : BONDS_2,
+                  3 : BONDS_3}
 
-
-stdv = {'H': 5, 'C': 1, 'N': 1, 'O': 2, 'F': 3}
-margin1, margin2, margin3 = 10, 5, 3
-
-allowed_bonds = {'H': 1, 'C': 4, 'N': 3, 'O': 2, 'F': 1, 'B': 3, 'Al': 3,
-                 'Si': 4, 'P': [3, 5],
-                 'S': 4, 'Cl': 1, 'As': 3, 'Br': 1, 'I': 1, 'Hg': [1, 2],
-                 'Bi': [3, 5]}
-
-
-def get_bond_order(atom1, atom2, distance, check_exists=False):
-    distance = 100 * distance  # We change the metric
-
-    # Check exists for large molecules where some atom pairs do not have a
-    # typical bond length.
-    if check_exists:
-        if atom1 not in bonds1:
-            return 0
-        if atom2 not in bonds1[atom1]:
-            return 0
-
-    # margin1, margin2 and margin3 have been tuned to maximize the stability of
-    # the QM9 true samples.
-    if distance < bonds1[atom1][atom2] + margin1:
-
-        # Check if atoms in bonds2 dictionary.
-        if atom1 in bonds2 and atom2 in bonds2[atom1]:
-            thr_bond2 = bonds2[atom1][atom2] + margin2
-            if distance < thr_bond2:
-                if atom1 in bonds3 and atom2 in bonds3[atom1]:
-                    thr_bond3 = bonds3[atom1][atom2] + margin3
-                    if distance < thr_bond3:
-                        return 3        # Triple
-                return 2            # Double
-        return 1                # Single
-    return 0                # No bond
-
-
-def geom_predictor(p, l, margin1=5, limit_bonds_to_one=False):
-    """ p: atom pair (couple of str)
-        l: bond length (float)"""
-    bond_order = get_bond_order(p[0], p[1], l, check_exists=True)
-
-    # If limit_bonds_to_one is enabled, every bond type will return 1.
-    if limit_bonds_to_one:
-        return 1 if bond_order > 0 else 0
-    else:
-        return bond_order
-
+# Tuned to maximize the stability of the QM9 true samples
+MARGIN_1, MARGIN_2, MARGIN_3 = 10, 5, 3
