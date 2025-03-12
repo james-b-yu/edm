@@ -87,6 +87,9 @@ def train_model(args,dataloader,log_file="logs/alt_3_training_log.csv",checkpoin
             batch_size = data["batch_size"]  
             time_int = torch.randint(low=0, high=args.num_steps + 1, size=(batch_size, ), device=args.device, dtype=torch.long)
 
+            if args.data_augmentation:
+                data["positions"] = random_rotation(data["positions"]).detach()
+
             if args.use_non_masked:
                 assert(isinstance(model, EDM))
                 assert(isinstance(data, EDMDataloaderItem))

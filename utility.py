@@ -100,70 +100,63 @@ def gradient_clipping(model, gradnorm_queue, default_clip=1.0):
 
 
 # Rotation data augmntation
-def random_rotation(x, n_nodes):
-    """
-    Apply a random 3D rotation to molecular coordinates.
-    
-    Args:
-        x (torch.Tensor): Coordinates tensor of shape (num_atoms, 3).
-        n_nodes (torch.Tensor): Number of nodes (atoms) per molecule.
-
-    Returns:
-        torch.Tensor: Rotated coordinates with the same shape as input.
-    """
+def random_rotation(x):
+    bs, n_nodes, n_dims = x.size()
     device = x.device
     angle_range = np.pi * 2
-    rotated_coords = []
+    if n_dims == 2:
+        theta = torch.rand(bs, 1, 1).to(device) * angle_range - np.pi
+        cos_theta = torch.cos(theta)
+        sin_theta = torch.sin(theta)
+        R_row0 = torch.cat([cos_theta, -sin_theta], dim=2)
+        R_row1 = torch.cat([sin_theta, cos_theta], dim=2)
+        R = torch.cat([R_row0, R_row1], dim=1)
 
-    # Iterate over molecules
-    split_coords = torch.split(x, n_nodes.tolist())  # Split coordinates per molecule
-    for molecule_coords in split_coords:
-        num_atoms = molecule_coords.shape[0]  # Number of atoms in the molecule
-        
-        if num_atoms == 0:  # Skip empty molecules (unlikely, but for safety)
-            rotated_coords.append(molecule_coords)
-            continue
+        x = x.transpose(1, 2)
+        x = torch.matmul(R, x)
+        x = x.transpose(1, 2)
 
-        molecule_coords = molecule_coords.unsqueeze(0)  # Shape: (1, num_atoms, 3)
+    elif n_dims == 3:
 
         # Build Rx
-        Rx = torch.eye(3, device=device).unsqueeze(0)
-        theta = torch.rand(1, 1, device=device) * angle_range - np.pi
+        Rx = torch.eye(3).unsqueeze(0).repeat(bs, 1, 1).to(device)
+        theta = torch.rand(bs, 1, 1).to(device) * angle_range - np.pi
         cos = torch.cos(theta)
         sin = torch.sin(theta)
-        Rx[:, 1, 1] = cos
-        Rx[:, 1, 2] = sin
-        Rx[:, 2, 1] = -sin
-        Rx[:, 2, 2] = cos
+        Rx[:, 1:2, 1:2] = cos
+        Rx[:, 1:2, 2:3] = sin
+        Rx[:, 2:3, 1:2] = - sin
+        Rx[:, 2:3, 2:3] = cos
 
         # Build Ry
-        Ry = torch.eye(3, device=device).unsqueeze(0)
-        theta = torch.rand(1, 1, device=device) * angle_range - np.pi
+        Ry = torch.eye(3).unsqueeze(0).repeat(bs, 1, 1).to(device)
+        theta = torch.rand(bs, 1, 1).to(device) * angle_range - np.pi
         cos = torch.cos(theta)
         sin = torch.sin(theta)
-        Ry[:, 0, 0] = cos
-        Ry[:, 0, 2] = -sin
-        Ry[:, 2, 0] = sin
-        Ry[:, 2, 2] = cos
+        Ry[:, 0:1, 0:1] = cos
+        Ry[:, 0:1, 2:3] = -sin
+        Ry[:, 2:3, 0:1] = sin
+        Ry[:, 2:3, 2:3] = cos
 
         # Build Rz
-        Rz = torch.eye(3, device=device).unsqueeze(0)
-        theta = torch.rand(1, 1, device=device) * angle_range - np.pi
+        Rz = torch.eye(3).unsqueeze(0).repeat(bs, 1, 1).to(device)
+        theta = torch.rand(bs, 1, 1).to(device) * angle_range - np.pi
         cos = torch.cos(theta)
         sin = torch.sin(theta)
-        Rz[:, 0, 0] = cos
-        Rz[:, 0, 1] = sin
-        Rz[:, 1, 0] = -sin
-        Rz[:, 1, 1] = cos
+        Rz[:, 0:1, 0:1] = cos
+        Rz[:, 0:1, 1:2] = sin
+        Rz[:, 1:2, 0:1] = -sin
+        Rz[:, 1:2, 1:2] = cos
 
-        # Apply rotations
-        molecule_coords = molecule_coords.transpose(1, 2)  # Shape: (1, 3, num_atoms)
-        molecule_coords = torch.matmul(Rx, molecule_coords)
-        molecule_coords = torch.matmul(Ry, molecule_coords)
-        molecule_coords = torch.matmul(Rz, molecule_coords)
-        molecule_coords = molecule_coords.transpose(1, 2).squeeze(0)  # Back to (num_atoms, 3)
+        x = x.transpose(1, 2)
+        x = torch.matmul(Rx, x)
+        #x = torch.matmul(Rx.transpose(1, 2), x)
+        x = torch.matmul(Ry, x)
+        #x = torch.matmul(Ry.transpose(1, 2), x)
+        x = torch.matmul(Rz, x)
+        #x = torch.matmul(Rz.transpose(1, 2), x)
+        x = x.transpose(1, 2)
+    else:
+        raise Exception("Not implemented Error")
 
-        rotated_coords.append(molecule_coords)
-
-    # Recombine rotated molecules
-    return torch.cat(rotated_coords, dim=0).contiguous()
+    return x.contiguous()

@@ -31,6 +31,9 @@ parser.add_argument("--lr", default=1e-5, type=float, help="learning rate")
 parser.add_argument("--no-clip_grad", default=True, action="store_false", dest="clip_grad", help="if specified, do not clip gradients (if not specified, we clip gradients)")
 parser.add_argument("--max_grad_norm", default=8., type=float, help="maximum gradient norm to tolerate")
 parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu", type=str, help="torch device to use")
+parser.add_argument("--data-augmentation", default=False, type=bool, help="whether to use data augmentation")
+
+
 
 parser.add_argument("--hidden-d", default=256, type=int, help="EGNN hidden dimension")
 parser.add_argument("--num-layers", default=9, type=int, help="EGNN layers")
