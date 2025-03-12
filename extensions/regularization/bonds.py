@@ -2,7 +2,7 @@ import random
 import glob
 import torch
 import numpy as np
-from configs.datasets_config import QM9_WITH_H, GEOM_WITH_H
+from dataset_meta import QM9_WITH_H, GEOM_WITH_H
 from extensions.regularization import dataset, bond_analyze
 
 def load_molecule_xyz(file, dataset_info):

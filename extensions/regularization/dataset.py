@@ -1,6 +1,6 @@
 import os
 from torch.utils.data import DataLoader
-from configs.datasets_config import get_dataset_info
+from dataset_meta import get_dataset_info
 from extensions.regularization import build_geom_dataset
 from extensions.regularization.data.args import init_argparse
 from extensions.regularization.data.collate import PreprocessQM9

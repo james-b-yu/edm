@@ -14,7 +14,7 @@ from args import args
 from utils.files import check_hash_file, hash_file
 from utils.qm9 import charge_to_idx, ensure_qm9_raw_data, ensure_qm9_raw_excluded, ensure_qm9_raw_splits, ensure_qm9_raw_thermo, ensure_qm9_processed
 
-from configs.datasets_config import QM9_WITH_H, QM9_WITHOUT_H
+from dataset_meta import QM9_WITH_H, QM9_WITHOUT_H
 
 @dataclass
 class EDMDatasetItem:
