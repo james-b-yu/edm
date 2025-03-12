@@ -2,6 +2,7 @@
 .conda/
 data/
 checkpoints/
+logs/
 wandb/
 playground.py
 playground.ipynb
