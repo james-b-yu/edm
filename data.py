@@ -52,9 +52,9 @@ class EDMDataloaderItem:
         size_log_probs (torch.Tensor): [B] prior log probs of molecule size
     """
     n_nodes: torch.Tensor
-    coords: torch.Tensor
+    coord: torch.Tensor
     one_hot: torch.Tensor
-    charges: torch.Tensor
+    charge: torch.Tensor
     edges: torch.Tensor
     reduce: torch.Tensor
     batch_mean: torch.Tensor
@@ -67,15 +67,15 @@ class EDMDataloaderItem:
         """calls `torch.Tensor.to` on all tensors, assigning the results
         """
         self.n_nodes = self.n_nodes.to(*args, **kwargs)
-        self.coords = self.coords.to(*args, **kwargs)
+        self.coord = self.coord.to(*args, **kwargs)
         self.one_hot = self.one_hot.to(*args, **kwargs)
-        self.charges = self.charges.to(*args, **kwargs)
-        self.edges = self.edges.to(dtype=torch.long, device=self.charges.device)  # force long type
+        self.charge = self.charge.to(*args, **kwargs)
+        self.edges = self.edges.to(dtype=torch.long, device=self.charge.device)  # force long type
         self.reduce = self.reduce.to(*args, **kwargs)
         self.batch_mean = self.batch_mean.to(*args, **kwargs)
         self.batch_sum = self.batch_sum.to(*args, **kwargs)
         self.demean = self.demean.to(*args, **kwargs)
-        self.expand_idx = self.expand_idx.to(*args, **kwargs)
+        self.expand_idx = self.expand_idx.to(dtype=torch.long, device=self.demean.device)
         self.size_log_probs = self.size_log_probs.to(*args, **kwargs)
         
     def __getitem__(self, key):
@@ -94,7 +94,7 @@ class EDMDataloaderItem:
     
     @property
     def positions(self):
-        return self.coords
+        return self.coord
 
 QM9Attributes = Literal["index", "A", "B", "C", "mu", "alpha", "homo", "lumo", "gap", "r2", "zpve", "U0", "U", "H", "G", "Cv", "omega1", "zpve_thermo", "U0_thermo", "U_thermo", "H_thermo", "G_thermo", "Cv_thermo"]
 QM9ProcessedData = dict[Literal["num_atoms", "classes", "charges", "positions", QM9Attributes], torch.Tensor]
@@ -134,6 +134,7 @@ class QM9Dataset(EDMDataset):
         
         self.split = split
         self.use_h = use_h
+        self.atom_types = torch.tensor([1,6,7,8,9], dtype=torch.long) if use_h else torch.tensor([6,7,8,9], dtype=torch.long)
         
         processed_filename = f"{split}_{"h" if use_h else "no_h"}"
         self._processed_path = path.join(args.data_dir, "qm9", f"{processed_filename}.npz")
@@ -149,16 +150,15 @@ class QM9Dataset(EDMDataset):
     def __getitem__(self, index) -> EDMDatasetItem:
         n_nodes = self._data["num_atoms"][index]
         coords = self._data["positions"][index, :n_nodes]
-        classes = self._data["classes"][index, :n_nodes]
         charges = self._data["charges"][index, :n_nodes]
-        eye = torch.eye(self.num_atom_types)
         size_log_prob = self.log_size_histogram_probs[int(n_nodes)]
+        one_hot = charges[:, None] == self.atom_types
         
         return EDMDatasetItem(
             n_nodes = int(n_nodes),
             coords = coords,
             charges = charges,
-            one_hot = eye[classes],
+            one_hot = one_hot,
             size_log_prob = size_log_prob
         )
 
@@ -207,7 +207,7 @@ def _collate_fn(data: list[EDMDatasetItem]):
         batch_sum = torch.block_diag(*[torch.ones(size=(1, int(n)), dtype=torch.float32) for n in n_nodes])
         coords = demean @ coords  # immediately demean the coords
 
-        return EDMDataloaderItem(n_nodes=n_nodes, coords=coords, one_hot=one_hot, charges=charges, edges=edges, reduce=reduce, batch_mean=batch_mean, batch_sum=batch_sum, demean=demean, expand_idx=expand_idx, size_log_probs=size_log_probs)
+        return EDMDataloaderItem(n_nodes=n_nodes, coord=coords, one_hot=one_hot, charge=charges, edges=edges, reduce=reduce, batch_mean=batch_mean, batch_sum=batch_sum, demean=demean, expand_idx=expand_idx, size_log_probs=size_log_probs)
 
 def get_dummy_dataloader(num_atom_types: int, len: int, max_nodes: int, batch_size: int):
     return td.DataLoader(dataset=DummyDataset(num_atom_types=num_atom_types, max_nodes=max_nodes, len=len), batch_size=batch_size, collate_fn=_collate_fn)

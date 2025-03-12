@@ -4,6 +4,7 @@ from torch.utils.data import DataLoader
 from tqdm.auto import tqdm
 from os import path
 
+from data import EDMDataloaderItem
 from masked_model import MaskedEDM
 from model import EDM
 from model_config import get_config_from_args
@@ -23,16 +24,8 @@ def do_demo(args: Namespace, dl: DataLoader):
 
         if args.use_non_masked:
             assert(isinstance(model, EDM))
-            (eps_coord, eps_feat), (pred_eps_coord, pred_eps_feat) = model.get_eps_and_predicted_eps(
-                    n_nodes=data["n_nodes"],
-                    charge=data["charges"],
-                    coord=data["coords"],
-                    demean=data["demean"],
-                    edges=data["edges"],
-                    one_hot=data["one_hot"],
-                    reduce=data["reduce"],
-                    time_int=time_int
-                )
+            assert(isinstance(data, EDMDataloaderItem))
+            (eps_coord, eps_feat), (pred_eps_coord, pred_eps_feat) = model.get_eps_and_predicted_eps(data, time_int=time_int)
         else:
             assert(isinstance(model, MaskedEDM))
             (eps_coord, eps_feat), (pred_eps_coord, pred_eps_feat) = model.get_eps_and_predicted_eps(data["positions"], data["one_hot"], data["charges"], time_int, data["node_mask"], data["edge_mask"])
