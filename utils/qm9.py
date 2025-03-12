@@ -74,10 +74,6 @@ def process_xyz_qm9(xyz_path: str, use_h: bool, therm_dict: dict[str, dict[str, 
     -------
     molecule : dict
         Dictionary containing the molecular properties of the associated file object.
-
-    Notes
-    -----
-    TODO : Replace breakpoint with a more informative failure?
     """
     charge_dict = {'H': 1, 'C': 6, 'N': 7, 'O': 8, 'F': 9}
     max_num_nodes = 29 if use_h else 9
@@ -120,7 +116,7 @@ def process_xyz_qm9(xyz_path: str, use_h: bool, therm_dict: dict[str, dict[str, 
         atom_charges = [c for c in atom_charges if c != 1]
 
     charges = np.array(atom_charges + [0] * (max_num_nodes - len(atom_charges)), dtype=np.int64)
-    classes = charge_to_idx(charges, use_h)
+    classes = charge_to_idx(charges.copy(), use_h)
 
     molecule = {'num_atoms': np.array(num_atoms, dtype=np.int64), 'charges': charges, 'classes': classes, 'positions': np.array(atom_positions + [[0.0, 0.0, 0.0]] * (max_num_nodes - len(atom_charges)), dtype=np.float32)}
     molecule.update({key: np.array(value, dtype=np.float32) for key, value in mol_props.items()})
