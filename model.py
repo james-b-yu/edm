@@ -180,7 +180,7 @@ class EDM(BaseEDM):
         Returns:
             tuple[tuple[torch.Tensor, torch.Tensor], tuple[torch.Tensor, torch.Tensor]]: actual and predicted epsilons, ready to calculate squared difference norm or mse, etc.
         """
-        s_coord, s_one_hot, s_charge = self.scale_inputs(data.coord, data.one_hot, data.charge)
+        s_coords, s_one_hot, s_charges = self.scale_inputs(data.coords, data.one_hot, data.charges)
         if isinstance(time_int, float):
             time_int = torch.full(fill_value=time_int, size=(data.batch_size, ), dtype=torch.long)
         assert(isinstance(time_int, torch.Tensor) and time_int.dtype == torch.long and time_int.shape == (data.batch_size, ))
@@ -189,23 +189,23 @@ class EDM(BaseEDM):
         alf = self.schedule["alpha"][time_int][:, None]
         sig = self.schedule["sigma"][time_int][:, None]
         
-        s_feat = torch.cat([s_one_hot, s_charge], dim=-1)
+        s_feat = torch.cat([s_one_hot, s_charges], dim=-1)
         
-        eps_feat = torch.randn_like(s_feat)
-        eps_coord   = data.demean @ torch.randn_like(s_coord)
+        eps_feats = torch.randn_like(s_feat)
+        eps_coords   = data.demean @ torch.randn_like(s_coords)
 
-        z_coord = alf * s_coord + sig * eps_coord
-        z_feat  = alf * s_feat + sig * eps_feat
+        z_coords = alf * s_coords + sig * eps_coords
+        z_feats  = alf * s_feat + sig * eps_feats
         
         time_frac = time_int / self.config.num_steps
-        (pred_eps_coord, pred_eps_feat) = self.egnn(
-            coords=z_coord,
-            features=z_feat,
-            n_nodes=data.n_nodes,
+        (pred_eps_coords, pred_eps_feats) = self.egnn(
+            coords=z_coords,
+            features=z_feats,
+            n_nodes=data.num_atoms,
             edges=data.edges,
             reduce=data.reduce,
             demean=data.demean,
             time_frac=time_frac
         )
     
-        return (eps_coord, eps_feat), (pred_eps_coord, pred_eps_feat)
+        return (eps_coords, eps_feats), (pred_eps_coords, pred_eps_feats)

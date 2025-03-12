@@ -11,6 +11,7 @@ from os import path
 from multiprocessing import cpu_count
 
 from args import args
+from utils.diffusion import demean_using_mask
 from utils.files import check_hash_file, hash_file
 from utils.qm9 import charge_to_idx, ensure_qm9_raw_data, ensure_qm9_raw_excluded, ensure_qm9_raw_splits, ensure_qm9_raw_thermo, ensure_qm9_processed
 
@@ -32,9 +33,42 @@ class EDMDatasetItem:
     size_log_prob: float
 
 @dataclass
-class EDMDataloaderItem:
+class EDMBaseDataloaderItem:
+    """A class representing a batch of molecules. This base class contains types of information common to both the masked and flattened representations, although the actual shapes of these tensors will differ between the two
     """
-    A class representing a batch of molecules. Note that we use "flattened" notation, in that coords and features are one long tensor of size [N, 3] or [N, num_atom_types] respectively, where N is the number of atoms across the entire batch. This allows each molecule to have a different number of atoms and we keep track of this dynamically.
+    num_atoms: torch.Tensor
+    coords: torch.Tensor
+    one_hot: torch.Tensor
+    charges: torch.Tensor
+    size_log_probs: torch.Tensor
+    
+    def to_(self, *args, **kwargs):
+        """calls `torch.Tensor.to` on all tensors, assigning the results
+        """
+        self.coords = self.coords.to(*args, **kwargs)
+        self.one_hot = self.one_hot.to(*args, **kwargs)
+        self.charges = self.charges.to(*args, **kwargs)
+        self.size_log_probs = self.size_log_probs.to(*args, **kwargs)
+        
+        # force long
+        self.num_atoms = self.num_atoms.to(dtype=torch.long, device=self.coords.device)
+
+    @property
+    def batch_size(self):
+        return self.num_atoms.numel()
+
+    def __getitem__(self, key):
+        if key == "batch_size":
+            return self.batch_size
+        elif key in self.__dict__:
+            return self.__dict__[key]
+        else:
+            raise KeyError(f"Key '{key}' not found.")
+
+@dataclass
+class EDMDataloaderItem(EDMBaseDataloaderItem):
+    """
+     Note that we use "flattened" notation, in that coords and features are one long tensor of size [N, 3] or [N, num_atom_types] respectively, where N is the number of atoms across the entire batch. This allows each molecule to have a different number of atoms and we keep track of this dynamically.
 
     We treat each batch as one single large "graph": each individual molecule in the batch has fully connected nodes. Therefore in order to represent the edges in the batch we only require tensors of outer length NN, where NN = (n_nodes ** 2).sum() is the number of edges in the batch.
 
@@ -51,50 +85,41 @@ class EDMDataloaderItem:
         expand_idx (torch.Tensor): (N) if a is a vector of length B with elements corresponding to each molecule in the batch, then a[expand_idx] is a vector of length N where each element is repeated for every atom in the molecule
         size_log_probs (torch.Tensor): [B] prior log probs of molecule size
     """
-    n_nodes: torch.Tensor
-    coord: torch.Tensor
-    one_hot: torch.Tensor
-    charge: torch.Tensor
+    
     edges: torch.Tensor
     reduce: torch.Tensor
     batch_mean: torch.Tensor
     batch_sum: torch.Tensor
     demean: torch.Tensor
     expand_idx: torch.Tensor
-    size_log_probs: torch.Tensor
     
     def to_(self, *args, **kwargs):
         """calls `torch.Tensor.to` on all tensors, assigning the results
         """
-        self.n_nodes = self.n_nodes.to(*args, **kwargs)
-        self.coord = self.coord.to(*args, **kwargs)
-        self.one_hot = self.one_hot.to(*args, **kwargs)
-        self.charge = self.charge.to(*args, **kwargs)
-        self.edges = self.edges.to(dtype=torch.long, device=self.charge.device)  # force long type
+        super().to_(*args, **kwargs)
+    
         self.reduce = self.reduce.to(*args, **kwargs)
         self.batch_mean = self.batch_mean.to(*args, **kwargs)
         self.batch_sum = self.batch_sum.to(*args, **kwargs)
         self.demean = self.demean.to(*args, **kwargs)
-        self.expand_idx = self.expand_idx.to(dtype=torch.long, device=self.demean.device)
-        self.size_log_probs = self.size_log_probs.to(*args, **kwargs)
         
-    def __getitem__(self, key):
-        if key == "batch_size":
-            return self.batch_size
-        elif key == "positions":
-            return self.positions
-        elif key in self.__dict__:
-            return self.__dict__[key]
-        else:
-            raise KeyError(f"Key '{key}' not found.")
+        # force long type on these
+        self.edges = self.edges.to(dtype=torch.long, device=self.coords.device)
+        self.expand_idx = self.expand_idx.to(dtype=torch.long, device=self.coords.device)
         
-    @property
-    def batch_size(self):
-        return self.n_nodes.numel()
+@dataclass
+class EDMMaskedDataloaderItem(EDMBaseDataloaderItem):
+    node_mask: torch.Tensor
+    edge_mask: torch.Tensor
     
-    @property
-    def positions(self):
-        return self.coord
+    def to_(self, *args, **kwargs):
+        """calls `torch.Tensor.to` on all tensors, assigning the results
+        """
+        super().to_(*args, **kwargs)
+    
+        self.node_mask = self.node_mask.to(*args, **kwargs)
+        self.edge_mask = self.edge_mask.to(*args, **kwargs)
+
 
 QM9Attributes = Literal["index", "A", "B", "C", "mu", "alpha", "homo", "lumo", "gap", "r2", "zpve", "U0", "U", "H", "G", "Cv", "omega1", "zpve_thermo", "U0_thermo", "U_thermo", "H_thermo", "G_thermo", "Cv_thermo"]
 QM9ProcessedData = dict[Literal["num_atoms", "classes", "charges", "positions", "one_hot", QM9Attributes], torch.Tensor]
@@ -186,10 +211,49 @@ def _collate_fn(data: list[EDMDatasetItem]):
         batch_sum = torch.block_diag(*[torch.ones(size=(1, int(n)), dtype=torch.float32) for n in n_nodes])
         coords = demean @ coords  # immediately demean the coords
 
-        return EDMDataloaderItem(n_nodes=n_nodes, coord=coords, one_hot=one_hot, charge=charges, edges=edges, reduce=reduce, batch_mean=batch_mean, batch_sum=batch_sum, demean=demean, expand_idx=expand_idx, size_log_probs=size_log_probs)
+        return EDMDataloaderItem(num_atoms=n_nodes, coords=coords, one_hot=one_hot, charges=charges, edges=edges, reduce=reduce, batch_mean=batch_mean, batch_sum=batch_sum, demean=demean, expand_idx=expand_idx, size_log_probs=size_log_probs)
 
+def _masked_collate_fn(data: list[EDMDatasetItem]):
+    n_nodes = torch.tensor([d.n_nodes for d in data], dtype=torch.int64)
+    size_log_probs = torch.tensor([d.size_log_prob for d in data], dtype=torch.float32)
+    max_n_nodes = int(n_nodes.max())
+    coords  = torch.nn.utils.rnn.pad_sequence([d.coords for d in data], batch_first=True, padding_value=0)
+    one_hot = torch.nn.utils.rnn.pad_sequence([d.one_hot for d in data], batch_first=True, padding_value=0)
+    charges = torch.nn.utils.rnn.pad_sequence([d.charges for d in data], batch_first=True, padding_value=0)
+    
+    node_mask = charges > 0
+    edge_mask = node_mask[:, None, :] * node_mask[:, :, None]
+    edge_mask *= ~torch.eye(max_n_nodes, dtype=torch.bool)[None]
+    edge_mask = edge_mask.flatten(start_dim=1)
+    
+    # add extra dimension to things
+    node_mask = node_mask[:, :, None]
+    charges = charges[:, :, None]
+    
+    # set convert to floating point tensors
+    edge_mask = edge_mask.to(dtype=torch.float32)
+    node_mask = node_mask.to(dtype=torch.float32)
+    
+    # finally demean coordinates
+    coords = demean_using_mask(coords, node_mask)
+    batch_size = coords.shape[0]
+    
+    return EDMMaskedDataloaderItem(
+        num_atoms=n_nodes,
+        coords=coords,
+        one_hot=one_hot,
+        charges=charges,
+        node_mask=node_mask,
+        edge_mask=edge_mask,
+        size_log_probs=size_log_probs
+    )
 
 def get_qm9_dataloader(use_h: bool, split: Literal["train", "valid", "test"], batch_size: int, prefetch_factor: int|None=None, num_workers = 0, pin_memory=True, shuffle:bool|None=True):
     if shuffle is None:
         shuffle = split == "train"
     return td.DataLoader(dataset=QM9Dataset(use_h=use_h, split=split), batch_size=batch_size, collate_fn=_collate_fn, pin_memory=pin_memory, prefetch_factor=prefetch_factor, num_workers=num_workers, shuffle=shuffle)
+
+def get_masked_qm9_dataloader(use_h: bool, split: Literal["train", "valid", "test"], batch_size: int, prefetch_factor: int|None=None, num_workers=0, pin_memory=True, shuffle:bool|None=None):
+    if shuffle is None:
+        shuffle = split == "train"
+    return td.DataLoader(dataset=QM9Dataset(use_h=use_h, split=split), batch_size=batch_size, collate_fn=_masked_collate_fn, pin_memory=pin_memory, prefetch_factor=prefetch_factor, num_workers=num_workers, shuffle=shuffle)

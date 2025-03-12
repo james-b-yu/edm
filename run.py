@@ -5,8 +5,7 @@ This script is used to perform all running
 
 import sys
 
-from data import get_qm9_dataloader
-from masked_data import get_masked_qm9_dataloader
+from data import get_qm9_dataloader, get_masked_qm9_dataloader
 sys.path.append(".")
 from os import path
 import pickle

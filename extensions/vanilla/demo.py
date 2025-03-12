@@ -28,7 +28,7 @@ def do_demo(args: Namespace, dl: DataLoader):
             (eps_coord, eps_feat), (pred_eps_coord, pred_eps_feat) = model.get_eps_and_predicted_eps(data, time_int=time_int)
         else:
             assert(isinstance(model, MaskedEDM))
-            (eps_coord, eps_feat), (pred_eps_coord, pred_eps_feat) = model.get_eps_and_predicted_eps(data["positions"], data["one_hot"], data["charges"], time_int, data["node_mask"], data["edge_mask"])
+            (eps_coord, eps_feat), (pred_eps_coord, pred_eps_feat) = model.get_eps_and_predicted_eps(data["coords"], data["one_hot"], data["charges"], time_int, data["node_mask"], data["edge_mask"])
         
         sq_coord_err = (eps_coord - pred_eps_coord) ** 2
         sq_feat_err  = (eps_feat - pred_eps_feat) ** 2
