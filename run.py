@@ -15,6 +15,7 @@ from eval import compute_nll, load_model, load_test_data
 
 from args import args, parser
 from extensions import vanilla, variance
+from training_loop import training_loop
 
 if __name__ == "__main__":
     if args.checkpoint is not None:
@@ -47,3 +48,4 @@ if __name__ == "__main__":
         vanilla.run(args, masked_dataloders, wandb_run)
     if args.extension == "variance":
         variance.run(args, dataloaders, wandb_run)
+

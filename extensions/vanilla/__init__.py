@@ -6,10 +6,11 @@ from torch.utils.data import DataLoader
 from wandb.wandb_run import Run
 
 from .demo import do_demo
+from training_loop import training_loop
 
 def run(args: Namespace, dataloaders: dict[str, DataLoader], wandb_run: None|Run):
     if args.pipeline == "train":
-        raise NotImplementedError
+        training_loop(args,dataloaders["train"])
     elif args.pipeline == "valid":
         raise NotImplementedError
     elif args.pipeline == "sample":
