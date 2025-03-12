@@ -4,29 +4,12 @@ from typing import Literal
 import torch
 from torch import nn
 
+from model import BaseEDM
+from model_config import EDMConfig, EGCLConfig, EGNNConfig
 from utils.diffusion import cosine_beta_schedule, demean_using_mask, get_batch_edge_idx, get_coord_distance, polynomial_schedule, unsorted_segment_sum
 
-@dataclass
-class MaskedEGCLConfig:
-    device: torch.device|str
-    hidden_dim: int
-    tanh_multiplier: float
-
-@dataclass
-class MaskedEGNNConfig(MaskedEGCLConfig):
-    num_atom_types: int
-    num_layers: int
-
-@dataclass
-class MaskedEDMConfig(MaskedEGNNConfig):  # TODO: remove these defaults
-    coord_in_scale: float = 1.
-    one_hot_in_scale: float = 0.25
-    charge_in_scale: float = 0.1
-    num_steps: int = 1000
-    schedule_type: Literal["cosine", "polynomial"] = "polynomial"
-
 class MaskedEGCL(nn.Module):
-    def __init__(self, config: MaskedEGCLConfig):
+    def __init__(self, config: EGCLConfig):
         super().__init__()
         self.config = config
 
@@ -90,7 +73,7 @@ class MaskedEGCL(nn.Module):
         return phi_x, phi_h
 
 class MaskedEGNN(nn.Module):
-    def __init__(self, config: MaskedEGNNConfig):
+    def __init__(self, config: EGNNConfig):
         super().__init__()
         self.config = config
 
@@ -139,25 +122,12 @@ class MaskedEGNN(nn.Module):
         out_feat = out_feat[:, :-1].view(batch_size, max_num_atoms, -1) * node_mask  # we multiply again by node_mask since the bias term of embedding_out may be non-zero. but this is redundant if we never look at values corresponding to padding indices
         return out_coord, out_feat
 
-class MaskedEDM(nn.Module):
+class MaskedEDM(BaseEDM):
     """this is our masked implemention of vanilla EDM
     """
-    def scale_inputs(self, coord, one_hot, charge):
-        """given inputs, scale them to prepare for inputs according to config
-        """
-        s_coord, s_one_hot, s_charge = coord * self.config.coord_in_scale, one_hot * self.config.one_hot_in_scale, charge * self.config.charge_in_scale
-        return s_coord, s_one_hot, s_charge
-    def unscale_inputs(self, s_coord, s_one_hot, s_charge):
-        """given scaled values, unscale them to prepare for outputs according to config
-        """
-        coord, one_hot, charge = s_coord / self.config.coord_in_scale, s_one_hot / self.config.one_hot_in_scale, s_charge / self.config.charge_in_scale
-        return coord, one_hot, charge
-    
-    def __init__(self, config: MaskedEDMConfig):
-        super().__init__()
-        self.config = config
-        self.schedule = cosine_beta_schedule(config.num_steps, config.device) if config.schedule_type == "cosine" else polynomial_schedule(config.num_steps, config.device)
-        self.egnn = MaskedEGNN(config=self.config)
+    def __init__(self, config: EDMConfig):
+        super().__init__(config)
+        self.egnn = MaskedEGNN(config)
         self.to(config.device)
         
     def get_eps_and_predicted_eps(self, coord: torch.Tensor, one_hot: torch.Tensor, charge: torch.Tensor, time_int: torch.Tensor | int, node_mask: torch.Tensor, edge_mask: torch.Tensor):
@@ -199,15 +169,3 @@ class MaskedEDM(nn.Module):
     
         return (eps_coord, eps_feat), (pred_eps_coord, pred_eps_feat)
     
-def get_config_from_args(args: Namespace, num_atom_types: int):
-    return MaskedEDMConfig(
-        device=args.device,
-        hidden_dim=args.hidden_d,
-        tanh_multiplier=args.tanh_range,
-        num_layers=args.num_layers,
-        num_atom_types=num_atom_types,  # type:ignore
-        num_steps=args.num_steps,
-        schedule_type=args.noise_schedule,
-        coord_in_scale=1.,
-        one_hot_in_scale=0.25,
-        charge_in_scale=0.1)

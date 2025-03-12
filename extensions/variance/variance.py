@@ -15,7 +15,7 @@ class VarianceDiffusion(nn.Module):
         self.num_steps = num_steps
         self.schedule = cosine_beta_schedule(num_steps, device) if schedule == "cosine" else polynomial_schedule(num_steps, device)
         
-        self.V_h = nn.Parameter(0.25 + 0.5 * torch.rand(size=(self.egnn.config.features_d, )))
+        self.V_h = nn.Parameter(0.25 + 0.5 * torch.rand(size=(self.egnn.config.num_atom_types + 2, )))
         self.V_x = nn.Parameter(torch.tensor((1.)))
         
         self.to(device=device)
@@ -98,7 +98,7 @@ class VarianceDiffusion(nn.Module):
         z_coords = alf[:, None] * s_coords + sig[:, None] * eps_coords
         z_features = alf[:, None] * s_features + sig[:, None] * eps_features
         
-        pred_eps_coords, pred_eps_features = self.egnn(n_nodes=data.n_nodes, coords=z_coords, features=z_features, edges=data.edges, reduce=data.reduce, demean=data.demean, time=t)
+        pred_eps_coords, pred_eps_features = self.egnn(n_nodes=data.n_nodes, coords=z_coords, features=z_features, edges=data.edges, reduce=data.reduce, demean=data.demean, time_frac=t)
         
         ### TOOLS TO CALCULATE VANILLA LOSS ###
         def get_van_loss_t_greater_than_zero(): # for losses L1, ..., LT
@@ -159,7 +159,7 @@ class VarianceDiffusion(nn.Module):
             # for continuous coords, we resample 
             z0_coords = alf_0 * s_coords + sig_0 * eps_coords
             z0_features = alf_0 * s_features + sig_0 * eps_features
-            pred0_eps_coords, pred0_eps_features = self.egnn(n_nodes=data.n_nodes, coords=z0_coords, features=z0_features, edges=data.edges, reduce=data.reduce, demean=data.demean, time=0.)
+            pred0_eps_coords, pred0_eps_features = self.egnn(n_nodes=data.n_nodes, coords=z0_coords, features=z0_features, edges=data.edges, reduce=data.reduce, demean=data.demean, time_frac=0.)
             error0 = -0.5 * (data.batch_sum @ ((eps_coords - pred0_eps_coords) ** 2)).sum(dim=-1)
             log_px_given_z0 = error0  # during inference we take sums
             

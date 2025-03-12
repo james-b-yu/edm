@@ -1,24 +1,10 @@
 from typing import Any
 import torch
 from torch import nn
-from dataclasses import dataclass
 from data import EDMDataloaderItem
+from model_config import EDMConfig, EGCLConfig, EGNNConfig
+from utils.diffusion import cosine_beta_schedule, polynomial_schedule
 
-@dataclass
-class EGCLConfig:
-    num_layers: int
-    hidden_d: int
-    features_d: int
-    node_attr_d: int
-    edge_attr_d: int
-    use_tanh: bool
-    tanh_range: float
-
-@dataclass
-class EGNNConfig(EGCLConfig):
-    num_layers: int
-    use_resid: bool
-    
 def fan_out_init(p: nn.Module, skip: list[nn.Module]):
     if isinstance(p, nn.Linear) and p not in skip:
         nn.init.kaiming_uniform_(p.weight, mode="fan_out", nonlinearity="relu")
@@ -33,35 +19,35 @@ class EGCL(nn.Module):
         # the \(\phi_{e}\) network for edge operation
         self.edge_mlp = nn.Sequential(
             #            hi               hj            dij2         aij
-            nn.Linear(config.features_d   +   config.features_d   +   1   +   config.edge_attr_d, config.hidden_d),
+            nn.Linear(config.hidden_dim   +   config.hidden_dim   +   2, config.hidden_dim),
             nn.SiLU(),
-            nn.Linear(config.hidden_d, config.hidden_d),
+            nn.Linear(config.hidden_dim, config.hidden_dim),
             nn.SiLU()
         )
 
-        coord_final_layer = nn.Linear(config.hidden_d, 1, bias=False)
+        coord_final_layer = nn.Linear(config.hidden_dim, 1, bias=False)
         # make the final layer of the coord_mlp have small initial weights, to avoid the network blowing up when we start training (empirically if we do not include this line, then every layer of the EGCL gives a larger magnitude for coords and features, so by the last layer we have a tensor full of nans)
         nn.init.xavier_uniform_(coord_final_layer.weight, gain=0.001)
         # the \(\phi_{x}\) network for coordinate update (same architecture as above but we have an additional projection onto a scalar)
         self.coord_mlp = nn.Sequential(
             #            hi               hj            dij2         aij
-            nn.Linear(config.features_d   +   config.features_d   +   1   +   config.edge_attr_d, config.hidden_d),
+            nn.Linear(config.hidden_dim   +   config.hidden_dim   +   2, config.hidden_dim),
             nn.SiLU(),
-            nn.Linear(config.hidden_d, config.hidden_d),
+            nn.Linear(config.hidden_dim, config.hidden_dim),
             nn.SiLU(),
             coord_final_layer,
         )
 
         # the \(\phi_{h}\) network for node update
         self.node_mlp = nn.Sequential(
-            nn.Linear(config.features_d + config.hidden_d + config.node_attr_d, config.hidden_d),
+            nn.Linear(config.hidden_dim + config.hidden_dim, config.hidden_dim),
             nn.SiLU(),
-            nn.Linear(config.hidden_d, config.features_d)
+            nn.Linear(config.hidden_dim, config.hidden_dim)
         )
 
         # the \(\phi_{inf}\) network for edge inference operator
         self.inf_mlp = nn.Sequential(
-            nn.Linear(config.hidden_d, 1),
+            nn.Linear(config.hidden_dim, 1),
             nn.Sigmoid()
         )
         
@@ -71,7 +57,7 @@ class EGCL(nn.Module):
         # save things
         self.config = config
 
-    def forward(self, coords: torch.Tensor, features: torch.Tensor, edges: torch.Tensor, reduce: torch.Tensor, node_attr: torch.Tensor|None=None, edge_attr: torch.Tensor|None=None):
+    def forward(self, coords: torch.Tensor, features: torch.Tensor, edges: torch.Tensor, reduce: torch.Tensor, distance: torch.Tensor):
         """forward pass for equivariant graph convolutional layer
 
         Args:
@@ -79,8 +65,7 @@ class EGCL(nn.Module):
             features (torch.Tensor): [N, features_d]
             edges (torch.Tensor): [NN, 2] (torch.int64)
             reduce (torch.Tensor): [N, NN] (tensor of 1.0's and 0.0's that is a float)
-            node_attr (torch.Tensor | None, optional): Node attributes. None (if using no node attributes), or [N, node_attr_d]. Defaults to None.
-            edge_attr (torch.Tensor | None, optional): Edge attributes. None (if using no edge attributes), or [NN, node_attr_d]. Defaults to None.
+            distance (torch.Tensor): [NN, node_attr_d] for distances
         """
 
         x_e = coords[edges]  # [NN, 2, 3]
@@ -89,22 +74,18 @@ class EGCL(nn.Module):
         d_e = (x_e[:, 0, :] - x_e[:, 1, :]).norm(dim=1).unsqueeze(dim=1) # [NN, 1]
 
         # calculate output for the \(\phi_{e}\) and \(\phi_{x}\) networks
-        coord_mlp_in = edge_mlp_in = torch.cat([h_e_flattened, d_e ** 2] + ([edge_attr] if edge_attr is not None else []), dim=-1)
+        coord_mlp_in = edge_mlp_in = torch.cat([h_e_flattened, d_e ** 2, distance], dim=-1)
         phi_e = self.edge_mlp(edge_mlp_in)  # [NN, hidden_d]
         phi_x = self.coord_mlp(coord_mlp_in)   # [NN, 1]
 
         # calculate output for the \(\phi_{h}\) network, giving feature vector output
-        node_mlp_in = torch.cat([features, reduce @ (phi_e * self.inf_mlp(phi_e))] + ([node_attr] if node_attr is not None else []), dim=-1)
+        node_mlp_in = torch.cat([features, reduce @ (phi_e * self.inf_mlp(phi_e))], dim=-1)
         features_out: torch.Tensor = features + self.node_mlp(node_mlp_in)  # [N, features_d]
 
         # TODO: FIX THE ORDERING OF THIS!!! coord_mlp should go last and use features_out as the input
 
         # calculate coord vector output
-        # w = phi_x / (d_e + 1)  # [NN, 1]
-        if self.config.use_tanh:
-            w = self.config.tanh_range * torch.tanh(phi_x)
-        else:
-            w = phi_x
+        w = self.config.tanh_multiplier * torch.tanh(phi_x)
             
         normalised_coord_differences = (x_e[:, 0, :] - x_e[:, 1, :]) / (torch.clamp(d_e, min=1e-5) + 1)
         coords_out: torch.Tensor = coords + reduce @ (w * normalised_coord_differences)  # [N, 3]
@@ -119,51 +100,112 @@ class EGNN(nn.Module):
         assert config.num_layers > 1
 
         self.embedding  = nn.Linear(
-            in_features=config.features_d + 1,  # t/T is an additional non-noised feature
-            out_features=config.hidden_d,
+            in_features=config.num_atom_types + 2,  # charges and t/T is an additional non-noised feature
+            out_features=config.hidden_dim,
         )
         self.embedding_out = nn.Linear(
-            in_features=config.hidden_d,
-            out_features=config.features_d + 1,  # again, t/T is an additional non-noised feature
+            in_features=config.hidden_dim,
+            out_features=config.num_atom_types + 2,  # again, t/T is an additional non-noised feature
         )
         
-        self.egc_layers = nn.ModuleList([
+        self.egcls = nn.ModuleList([
             # note: all layers except the first have an additional edge attribute that is equal to the squared coordinate distance at the first layer (page 13)
-            EGCL(EGCLConfig(
-                features_d=config.hidden_d,  # features are already projected into latent space
-                num_layers=config.num_layers,
-                hidden_d=256,  # features are already projected into latent space
-                node_attr_d=config.node_attr_d,
-                edge_attr_d=config.edge_attr_d + 1, # distance between atoms at layer 0 becomes an additional extra edge attribute for layers 0, 1, 2, ... note that there is redundancy at layer 0 but we ignore this
-                use_tanh=config.use_tanh,
-                tanh_range=config.tanh_range)) for l in range(config.num_layers)
+            EGCL(config) for l in range(config.num_layers)
         ])
 
         self.config = config
 
-    def forward(self, n_nodes: torch.Tensor, coords: torch.Tensor, features: torch.Tensor, edges: torch.Tensor, reduce: torch.Tensor, demean: torch.Tensor, time: float | torch.Tensor, node_attr: torch.Tensor|None=None, edge_attr: torch.Tensor|None=None):
+    def forward(self, n_nodes: torch.Tensor, coords: torch.Tensor, features: torch.Tensor, edges: torch.Tensor, reduce: torch.Tensor, demean: torch.Tensor, time_frac: float | torch.Tensor):
         x_e = coords[edges]  # [NN, 2, 3]
         d_e = (x_e[:, 0, :] - x_e[:, 1, :]).norm(dim=1).unsqueeze(dim=1) # [NN, 1]
 
         coords_out = coords
         
-        if isinstance(time, float):
-            time = time * torch.ones(size=(coords.shape[0], 1), dtype=coords.dtype, layout=coords.layout, device=coords.device)            
-        assert isinstance(time, torch.Tensor)        
-        if len(time.shape) == 1:
-            time = time[:, None]
+        if isinstance(time_frac, float):
+            time_frac = time_frac * torch.ones(size=(coords.shape[0], 1), dtype=coords.dtype, layout=coords.layout, device=coords.device)            
+        assert isinstance(time_frac, torch.Tensor)        
+        if len(time_frac.shape) == 1:
+            time_frac = time_frac[:, None]
             
-        hidden = self.embedding(torch.cat([features, time], dim=-1))  # put noised features into latent space; t/T is an additional non-noised feature
+        hidden = self.embedding(torch.cat([features, time_frac], dim=-1))  # put noised features into latent space; t/T is an additional non-noised feature
         
-        edge_attr_with_distance = torch.cat([d_e ** 2] + ([edge_attr] if edge_attr is not None else []), dim=-1)
+        distance = d_e ** 2
 
-        for l, egcl in enumerate(self.egc_layers):
+        for l, egcl in enumerate(self.egcls):
             # note: all layers except the first have an additional edge attribute that is equal to the squared coordinate distance at the first layer (page 13)
-            coords_out, hidden = egcl(coords_out, hidden, edges, reduce, node_attr, edge_attr_with_distance)
+            coords_out, hidden = egcl(coords_out, hidden, edges, reduce, distance)
             
         features_out = self.embedding_out(hidden)[:, :-1]  # put hidden back into ambient space, and cut off the final bit representing t/T
         coords_out = demean @ coords_out
-        if self.config.use_resid:
-            coords_out = coords_out - coords
+        coords_out = coords_out - coords
 
         return coords_out, features_out
+
+class BaseEDM(nn.Module):
+    def __init__(self, config: EDMConfig):
+        super().__init__()
+        self.config = config
+        self.schedule = cosine_beta_schedule(config.num_steps, config.device) if config.schedule_type == "cosine" else polynomial_schedule(config.num_steps, config.device)
+        self.to(config.device)
+        
+    def scale_inputs(self, coord, one_hot, charge):
+        """given inputs, scale them to prepare for inputs according to config
+        """
+        s_coord, s_one_hot, s_charge = coord * self.config.coord_in_scale, one_hot * self.config.one_hot_in_scale, charge * self.config.charge_in_scale
+        return s_coord, s_one_hot, s_charge
+    def unscale_inputs(self, s_coord, s_one_hot, s_charge):
+        """given scaled values, unscale them to prepare for outputs according to config
+        """
+        coord, one_hot, charge = s_coord / self.config.coord_in_scale, s_one_hot / self.config.one_hot_in_scale, s_charge / self.config.charge_in_scale
+        return coord, one_hot, charge
+    
+
+class EDM(BaseEDM):
+    def __init__(self, config: EDMConfig):
+        super().__init__(config)
+        self.egnn = EGNN(config)
+        self.to(config.device)
+        
+    def get_eps_and_predicted_eps(self, n_nodes: torch.Tensor, coord: torch.Tensor, one_hot: torch.Tensor, charge: torch.Tensor, edges: torch.Tensor, reduce: torch.Tensor, demean: torch.Tensor, time_int: torch.Tensor | int):
+        """
+        this method is useful during training and evaluation
+        given ground truth data, and (potentially random) time generate epsilons and perform one evaluation of the model to predict these epsilons
+
+        Args:
+            coord (torch.Tensor): self-explanatory
+            one_hot (torch.Tensor): self-explanatory
+            charge (torch.Tensor): self-explanatory
+            time_int (torch.Tensor | int): either an integer, in which case all molecules in the batch will have the same time step, or a long-tensor of shape [batch_size]. note this is an INTEGER from 0 to num_steps, inclusive
+            
+
+        Returns:
+            tuple[tuple[torch.Tensor, torch.Tensor], tuple[torch.Tensor, torch.Tensor]]: actual and predicted epsilons, ready to calculate squared difference norm or mse, etc.
+        """
+        s_coord, s_one_hot, s_charge = self.scale_inputs(coord, one_hot, charge)
+        if isinstance(time_int, float):
+            time_int = torch.full(fill_value=time_int, size=(s_coord.shape[0], ), dtype=torch.long)
+        assert(isinstance(time_int, torch.Tensor) and time_int.dtype == torch.long)
+        
+        alf = self.schedule["alpha"][time_int][:, None, None]
+        sig = self.schedule["sigma"][time_int][:, None, None]
+        
+        s_feat = torch.cat([s_one_hot, s_charge], dim=-1)
+        
+        eps_feat = torch.randn_like(s_feat)
+        eps_coord   = demean @ torch.randn_like(s_coord)
+
+        z_coord = alf * s_coord + sig * eps_coord
+        z_feat  = alf * s_feat + sig * eps_feat
+        
+        time_frac = time_int / self.config.num_steps
+        (pred_eps_coord, pred_eps_feat) = self.egnn(
+            n_nodes=n_nodes,
+            coords=z_coord,
+            features=z_feat,
+            edges=edges,
+            reduce=reduce,
+            demean=demean,
+            time_frac=time_frac
+        )
+    
+        return (eps_coord, eps_feat), (pred_eps_coord, pred_eps_feat)

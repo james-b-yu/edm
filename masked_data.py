@@ -26,14 +26,14 @@ class QM9ProcessedDataClass:
         return self._data[key]
     def __setitem__(self, key: str, val):
         self._data[key] = val
-    def _to(self, *args, **kwargs):
+    def to_(self, *args, **kwargs):
         for key, val in self._data.items():
             if isinstance(val, torch.Tensor):
                 self._data[key] = val.to(*args, **kwargs)
 
 class QM9MaskedDataset(td.Dataset):
     def __init__(self, use_h: bool, split: Literal["train", "valid", "test"]):
-        self.num_atom_classes=QM9_WITH_H["num_atom_classes"] if use_h else QM9_WITHOUT_H["num_atom_classes"]
+        self.num_atom_types=QM9_WITH_H["num_atom_types"] if use_h else QM9_WITHOUT_H["num_atom_types"]
         self.max_nodes=QM9_WITH_H["largest_molecule_size"] if use_h else QM9_WITHOUT_H["largest_molecule_size"]
         self.size_histogram=QM9_WITH_H["molecule_size_histogram"] if use_h else QM9_WITHOUT_H["molecule_size_histogram"]
         

@@ -84,21 +84,12 @@ def enter_train_valid_test_loop(args: Namespace, dataloaders: dict[str, DataLoad
     
     for _, dl in dataloaders.items():
         assert(isinstance(dl.dataset, EDMDataset))
-        features_d = dl.dataset.num_atom_classes + 1
+        features_d = dl.dataset.num_atom_types + 1
     
     gradnorm_queue = Queue()
     gradnorm_queue.add(3000)  # Add large value that will be flushed.
     
-    model = VarianceDiffusion(egnn_config=EGNNConfig(
-        features_d=features_d,
-        node_attr_d=0,
-        edge_attr_d=0,
-        hidden_d=args.hidden_d,
-        num_layers=args.num_layers,
-        use_tanh=args.use_tanh,
-        tanh_range=args.tanh_range,
-        use_resid=args.use_resid,
-    ), num_steps=args.num_steps, schedule=args.noise_schedule, device=args.device)
+    model = VarianceDiffusion(egnn_config=EGNNConfig(), num_steps=args.num_steps, schedule=args.noise_schedule, device=args.device)
     optim = torch.optim.AdamW(
         model.parameters(),
         lr=args.lr, amsgrad=True,
@@ -108,14 +99,15 @@ def enter_train_valid_test_loop(args: Namespace, dataloaders: dict[str, DataLoad
     
     if args.checkpoint is not None:
         print(f"Loading model checkpoints using 'model.pth', 'optim.pth' located in {args.checkpoint}")
-        model.load_state_dict(torch.load(path.join(args.checkpoint, "model.pth"), map_location=args.device))
-        if args.restore_optim_state:
-            optim.load_state_dict(torch.load(path.join(args.checkpoint, "optim.pth"), map_location=args.device))
-        if args.restore_scheduler_state:
-            scheduler.load_state_dict(torch.load(path.join(args.checkpoint, "scheduler.pth"), map_location=args.device))        
-        if args.force_start_lr is not None:        
-            for param_group in optim.param_groups:
-                param_group['lr'] = args.force_start_lr
+        # TODO: fix
+        # model.load_state_dict(torch.load(path.join(args.checkpoint, "model.pth"), map_location=args.device))
+        # if args.restore_optim_state:
+        #     optim.load_state_dict(torch.load(path.join(args.checkpoint, "optim.pth"), map_location=args.device))
+        # if args.restore_scheduler_state:
+        #     scheduler.load_state_dict(torch.load(path.join(args.checkpoint, "scheduler.pth"), map_location=args.device))        
+        # if args.force_start_lr is not None:        
+        #     for param_group in optim.param_groups:
+        #         param_group['lr'] = args.force_start_lr
     
     for epoch in tqdm(range(args.start_epoch, args.end_epoch), leave=False, unit="epoch"):
         makedirs(path.join(args.out_dir, args.run_name), exist_ok=True)
@@ -164,7 +156,7 @@ def enter_train_valid_test_loop(args: Namespace, dataloaders: dict[str, DataLoad
 def enter_sample(args: Namespace, dataloaders: dict[str, DataLoader], wandb_run: None|Run):
     for _, dl in dataloaders.items():
         assert(isinstance(dl.dataset, EDMDataset))
-        features_d = dl.dataset.num_atom_classes + 1
+        features_d = dl.dataset.num_atom_types + 1
     
 
     model = VarianceDiffusion(egnn_config=EGNNConfig(

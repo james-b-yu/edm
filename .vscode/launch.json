@@ -12,6 +12,21 @@
             "console": "integratedTerminal"
         },
         {
+            "name": "DEBUG DEMO OWN ARCH",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/run.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--extension=vanilla",
+                "--no-wandb",
+                "--pipeline=demo",
+                "--checkpoint=./checkpoints/arch",
+                "--device=cuda",
+                "--use-non-masked"
+            ]
+        },
+        {
             "name": "DEBUG DEMO",
             "type": "debugpy",
             "request": "launch",

@@ -15,7 +15,7 @@ def dummy_dl():
     Returns:
         Dataloader:
     """
-    return get_dummy_dataloader(num_atom_classes=5, len=1000, max_nodes=25, batch_size=64)
+    return get_dummy_dataloader(num_atom_types=5, len=1000, max_nodes=25, batch_size=64)
 
 @pytest.fixture
 def qm9_h_train_dl():
