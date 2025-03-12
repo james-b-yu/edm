@@ -19,7 +19,7 @@ from utility import collate_fn, gradient_clipping, random_rotation
 from losses import compute_loss_and_nll, compute_loss
 
 
-def train_model(args,dataloader,log_file="logs/alt_3_training_log.csv",checkpoint_interval=5):
+def train_model(args,dataloader,log_file="logs/alt_3_training_log.csv",checkpoint_interval=5,run=1):
     
     # Set device
     device = args.device
@@ -130,7 +130,7 @@ def train_model(args,dataloader,log_file="logs/alt_3_training_log.csv",checkpoin
         # Save checkpoint
         if (epoch + 1) % checkpoint_interval == 0:
             # checkpoint_path = f"checkpoints/epoch_{epoch+1}.pth"
-            checkpoint_path = f"{args.out_dir}/epoch_{epoch+1}.pth"
+            checkpoint_path = f"{args.out_dir}/{run}/epoch_{epoch+1}.pth"
             torch.save({
                 'epoch': epoch + 1,
                 'model_state_dict': model.state_dict(),
@@ -141,7 +141,22 @@ def train_model(args,dataloader,log_file="logs/alt_3_training_log.csv",checkpoin
             print(f"[INFO] Checkpoint saved at {checkpoint_path}")
 
     print("[INFO] Training completed.")
-            
+    
+    # Save the final model
+    final_model_dir = os.path.join("trained_model", str(run))
+    if not os.path.exists(final_model_dir):
+        os.makedirs(final_model_dir)
+    final_model_path = os.path.join(final_model_dir, "final_model.pth")
+    torch.save({
+        'epoch': epoch + 1,
+        'model_state_dict': model.state_dict(),
+        'optimiser_state_dict': optimiser.state_dict(),
+        'scheduler_state_dict': scheduler.state_dict(),
+        'loss': epoch_loss,
+    }, final_model_path)
+    print(f"[INFO] Final model saved at {final_model_path}")
+
+
            
 # TODO: Implement the `validate_model` function
 # TODO: Implement data augmentation (e.g., random rotation)
