@@ -71,20 +71,19 @@ class EGCL(nn.Module):
         x_e = coords[edges]  # [NN, 2, 3]
         h_e = features[edges]  # [NN, 2, features_d]
         h_e_flattened = h_e.flatten(start_dim=1)  # [NN, 2 * features_d]
-        d_e = (x_e[:, 0, :] - x_e[:, 1, :]).norm(dim=1).unsqueeze(dim=1) # [NN, 1]
+        d_e = (x_e[:, 0, :] - x_e[:, 1, :]).norm(dim=1, keepdim=True)
 
         # calculate output for the \(\phi_{e}\) and \(\phi_{x}\) networks
-        coord_mlp_in = edge_mlp_in = torch.cat([h_e_flattened, d_e ** 2, distance], dim=-1)
+        edge_mlp_in = torch.cat([h_e_flattened, d_e ** 2, distance], dim=-1)
         phi_e = self.edge_mlp(edge_mlp_in)  # [NN, hidden_d]
-        phi_x = self.coord_mlp(coord_mlp_in)   # [NN, 1]
 
         # calculate output for the \(\phi_{h}\) network, giving feature vector output
         node_mlp_in = torch.cat([features, reduce @ (phi_e * self.inf_mlp(phi_e))], dim=-1)
         features_out: torch.Tensor = features + self.node_mlp(node_mlp_in)  # [N, features_d]
 
-        # TODO: FIX THE ORDERING OF THIS!!! coord_mlp should go last and use features_out as the input
-
         # calculate coord vector output
+        coord_mlp_in = torch.cat([features_out[edges].flatten(start_dim=1), d_e ** 2, distance], dim=-1)
+        phi_x = self.coord_mlp(coord_mlp_in)   # [NN, 1]
         w = self.config.tanh_multiplier * torch.tanh(phi_x)
             
         normalised_coord_differences = (x_e[:, 0, :] - x_e[:, 1, :]) / (torch.clamp(d_e, min=1e-5) + 1)
@@ -166,7 +165,7 @@ class EDM(BaseEDM):
         self.egnn = EGNN(config)
         self.to(config.device)
         
-    def get_eps_and_predicted_eps(self, n_nodes: torch.Tensor, coord: torch.Tensor, one_hot: torch.Tensor, charge: torch.Tensor, edges: torch.Tensor, reduce: torch.Tensor, demean: torch.Tensor, time_int: torch.Tensor | int):
+    def get_eps_and_predicted_eps(self, data: EDMDataloaderItem, time_int: torch.Tensor | int):
         """
         this method is useful during training and evaluation
         given ground truth data, and (potentially random) time generate epsilons and perform one evaluation of the model to predict these epsilons
@@ -181,30 +180,31 @@ class EDM(BaseEDM):
         Returns:
             tuple[tuple[torch.Tensor, torch.Tensor], tuple[torch.Tensor, torch.Tensor]]: actual and predicted epsilons, ready to calculate squared difference norm or mse, etc.
         """
-        s_coord, s_one_hot, s_charge = self.scale_inputs(coord, one_hot, charge)
+        s_coord, s_one_hot, s_charge = self.scale_inputs(data.coord, data.one_hot, data.charge)
         if isinstance(time_int, float):
-            time_int = torch.full(fill_value=time_int, size=(s_coord.shape[0], ), dtype=torch.long)
-        assert(isinstance(time_int, torch.Tensor) and time_int.dtype == torch.long)
+            time_int = torch.full(fill_value=time_int, size=(data.batch_size, ), dtype=torch.long)
+        assert(isinstance(time_int, torch.Tensor) and time_int.dtype == torch.long and time_int.shape == (data.batch_size, ))
         
-        alf = self.schedule["alpha"][time_int][:, None, None]
-        sig = self.schedule["sigma"][time_int][:, None, None]
+        time_int = time_int[data.expand_idx]
+        alf = self.schedule["alpha"][time_int][:, None]
+        sig = self.schedule["sigma"][time_int][:, None]
         
         s_feat = torch.cat([s_one_hot, s_charge], dim=-1)
         
         eps_feat = torch.randn_like(s_feat)
-        eps_coord   = demean @ torch.randn_like(s_coord)
+        eps_coord   = data.demean @ torch.randn_like(s_coord)
 
         z_coord = alf * s_coord + sig * eps_coord
         z_feat  = alf * s_feat + sig * eps_feat
         
         time_frac = time_int / self.config.num_steps
         (pred_eps_coord, pred_eps_feat) = self.egnn(
-            n_nodes=n_nodes,
             coords=z_coord,
             features=z_feat,
-            edges=edges,
-            reduce=reduce,
-            demean=demean,
+            n_nodes=data.n_nodes,
+            edges=data.edges,
+            reduce=data.reduce,
+            demean=data.demean,
             time_frac=time_frac
         )
     
