@@ -11,7 +11,7 @@ def do_demo(args: Namespace, dl: DataLoader):
     print("This is a demo run which calculates mean-squared error on the validation (not test!) dataset")
     config = get_config_from_args(args, dl.dataset.num_atom_types)  # type:ignore
     model = MaskedEDM(config)
-    model.load_state_dict(torch.load(path.join(args.out_dir, args.checkpoint, "model.pth")))
+    model.load_state_dict(torch.load(path.join(args.checkpoint, "model.pth"), map_location=config.device))
     model.eval()
     
     for idx, data in enumerate(pbar := tqdm(dl)):
