@@ -56,7 +56,7 @@ class VarianceDiffusion(nn.Module):
         raise NotImplementedError("Please use self.egnn.forward")
     
     def calculate_loss(self, args: Namespace, split: Literal["train", "valid", "test"], data: EDMDataloaderItem, force_t: None|int = None):
-        s_coords, s_one_hot, s_charges = data.coords, *scale_features(data.one_hot, data.charges)
+        s_coords, s_one_hot, s_charges = data.coord, *scale_features(data.one_hot, data.charge)
         s_features = torch.cat([s_one_hot, s_charges], dim=-1)
         
         # if calculating training loss, treat L0 like L1:T
@@ -107,7 +107,7 @@ class VarianceDiffusion(nn.Module):
             return 0.5 * (sq_err_coords + sq_err_features)
         
         def get_van_kl_prior(): # for KL between q(zT | x) and standard normal
-            alf_T = torch.full(size=(data.coords.shape[0], ), fill_value=float(self.schedule["alpha"][-1]), dtype=data.coords.dtype, device=args.device)  # [N]            
+            alf_T = torch.full(size=(data.coord.shape[0], ), fill_value=float(self.schedule["alpha"][-1]), dtype=data.coord.dtype, device=args.device)  # [N]            
             sig_sq_T = torch.full_like(data.n_nodes, fill_value=float(self.schedule["sigma_squared"][-1]))  # [B]
             
             mu_T_coords = alf_T[:, None] * s_coords 
@@ -128,7 +128,7 @@ class VarianceDiffusion(nn.Module):
             us_sig_one_hot, us_sig_charges = unscale_features(self.schedule["sigma"][0], self.schedule["sigma"][0])
             
             # for integer-value charges, find gaussian integral of radius 1 around the deviation
-            us_charge_err_centered = data.charges - us_z_charges
+            us_charge_err_centered = data.charge - us_z_charges
             
             log_ph_charges_given_z0 = data.batch_sum @ torch.log(
                 cdf_standard_gaussian((us_charge_err_centered + 0.5) / us_sig_charges)
@@ -170,7 +170,7 @@ class VarianceDiffusion(nn.Module):
             us_sig0_one_hot, us_sig0_charges = unscale_features(sig_0, sig_0)
             
             # for integer-value charges, find gaussian integral of radius 1 around the deviation
-            us_charge_err_centered = data.charges - us_z0_charges[:, None]
+            us_charge_err_centered = data.charge - us_z0_charges[:, None]
             
             log_ph_charges_given_z0 = data.batch_sum @ torch.log(
                 cdf_standard_gaussian((us_charge_err_centered + 0.5) / us_sig0_charges)
