@@ -105,7 +105,7 @@ class MaskedEGNN(nn.Module):
         z_feat = torch.cat([z_feat, time_frac], dim=-1)
         
         # project features into high-dimensional latent space
-        h_feat = self.embedding(z_feat)  # TODO: should we mask this again?
+        h_feat = self.embedding(z_feat)
         z_squared_coord_dist, _ = get_coord_distance(z_coord, edge_idx)
         
         # propage through equivariant graph convolutional layers
