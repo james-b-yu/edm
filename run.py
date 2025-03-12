@@ -44,6 +44,6 @@ if __name__ == "__main__":
         )
     
     if args.extension == "vanilla":
-        vanilla.run(args, masked_dataloders, wandb_run)
+        vanilla.run(args, dataloaders if args.use_non_masked else masked_dataloders , wandb_run)
     if args.extension == "variance":
         variance.run(args, dataloaders, wandb_run)

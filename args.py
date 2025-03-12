@@ -21,7 +21,6 @@ def _validate_args(args: argparse.Namespace):
 parser.add_argument("--no-wandb", default=True, action="store_false", dest="use_wandb", help="specify if you do not want to use wandb (if not specified, we use wandb)")
 parser.add_argument("--wandb-project", default="MLMI4 EDM", type=str, help="wandb project name")
 
-
 parser.add_argument("--dataset", default="qm9", help="which dataset to train on, e.g. 'qm9', 'qm9_no_h'")
 parser.add_argument("--noise-schedule", default="polynomial", type=str, help="which noising schedule to use", choices=["cosine", "polynomial"])
 parser.add_argument("--use-resid", default=False, action="store_true", help="specify egnn learns residual of residual")
@@ -40,6 +39,7 @@ parser.add_argument("--run-name", default="edm_run", type=str, help="the name of
 parser.add_argument("--out-dir", default="./checkpoints", type=str, help="output will be contained in the folder <out_dir>/<run_name>/")
 
 parser.add_argument("--extension", default="vanilla", type=str, help="extension to use", choices=["vanilla", "variance"])
+parser.add_argument("--use-non-masked", default=False, action="store_true", help="whether to use our non-masked architecture")
 parser.add_argument("--pipeline", default="train", type=str, help="pipeline", choices=["train", "valid", "test", "demo"])
 parser.add_argument("--checkpoint", default=None, type=str, help="if specified, load checkpoint located in this folder")
 parser.add_argument("--no-restore-optim-state", default=True, action="store_false", dest="restore_optim_state", help="if specified, do not restore optim state from checkpoint (if not specified, then restores from optim.pth)")
