@@ -47,7 +47,7 @@ parser.add_argument("--no-restore-scheduler-state", default=True, action="store_
 
 parser.add_argument("--scheduler-factor", default=0.5, type=float, help="specify the amount by which the scheduler decreases the lr upon reaching a plateau")
 parser.add_argument("--scheduler-patience", default=10, type=int, help="specify how many epochs of non-improvement counts as a plateau")
-parser.add_argument("--scheduler-threshold", default=0.05, type=float, help="specify scheduler relative improvement threshold")
+parser.add_argument("--scheduler-threshold", default=0.01, type=float, help="specify scheduler relative improvement threshold")
 parser.add_argument("--scheduler-min-lr", default=5e-6, type=float, help="specify minimum learning rate for scheduler")
 
 parser.add_argument("--force-start-lr", default=None, type=float, help="if specified, force this learning rate upon checkpoint (no effect if not loading a checkpoint)")
