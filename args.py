@@ -1,5 +1,7 @@
 """This file gives the argparser.
 """
+from math import floor
+from multiprocessing import cpu_count
 import torch
 
 import argparse
@@ -45,12 +47,17 @@ parser.add_argument("--checkpoint", default=None, type=str, help="if specified, 
 parser.add_argument("--no-restore-optim-state", default=True, action="store_false", dest="restore_optim_state", help="if specified, do not restore optim state from checkpoint (if not specified, then restores from optim.pth)")
 parser.add_argument("--no-restore-scheduler-state", default=True, action="store_false", dest="restore_scheduler_state", help="if specified, do not restore scheduler state from checkpoint (if not specified, then restores from scheduler.pth)")
 
+parser.add_argument("--ema-beta", default=0.99, type=float, help="beta factor to use when calculating ema_model: ema_model = beta * ema_model + (1 - beta) * current_model")
 parser.add_argument("--scheduler-factor", default=0.5, type=float, help="specify the amount by which the scheduler decreases the lr upon reaching a plateau")
 parser.add_argument("--scheduler-patience", default=10, type=int, help="specify how many epochs of non-improvement counts as a plateau")
 parser.add_argument("--scheduler-threshold", default=0.01, type=float, help="specify scheduler relative improvement threshold")
 parser.add_argument("--scheduler-min-lr", default=5e-6, type=float, help="specify minimum learning rate for scheduler")
 
 parser.add_argument("--force-start-lr", default=None, type=float, help="if specified, force this learning rate upon checkpoint (no effect if not loading a checkpoint)")
+
+default_dl_num_workers = floor(0.9 * cpu_count())
+parser.add_argument("--dl-num-workers", default=default_dl_num_workers, type=int, help="set number of dataloader workers to use")
+parser.add_argument("--dl-prefetch-factor", default=None if default_dl_num_workers == 0 else 4, type=int, help="dataloader prefetch factor")
 
 parser.add_argument("--start-epoch", default=0, type=int, help="train epochs in [start-epoch, end-epoch) -- note this is only for bookkeeping and does not affect which model is loaded")
 parser.add_argument("--end-epoch", default=1300, type=int, help="train epochs in [start-epoch, end-epoch)")

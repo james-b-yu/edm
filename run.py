@@ -22,13 +22,13 @@ if __name__ == "__main__":
                 args_disk = pickle.load(f)
                 args = parser.parse_args(namespace=args_disk)
         except Exception as _:
-            pass
+            warnings.warn("Did not restore args.pkl from checkpoint")
     if args.dataset in ["qm9", "qm9_no_h"]:
         dataloaders = {
-            split: get_qm9_dataloader(use_h=args.dataset=="qm9", split=split, batch_size=args.batch_size) for split in ("train", "valid", "test")
+            split: get_qm9_dataloader(use_h=args.dataset=="qm9", split=split, batch_size=args.batch_size, pin_memory=False, num_workers=args.dl_num_workers, prefetch_factor=args.dl_prefetch_factor) for split in ("train", "valid", "test")
         }
         masked_dataloders = {
-            split: get_masked_qm9_dataloader(use_h=args.dataset=="qm9", split=split, batch_size=args.batch_size) for split in ("train", "valid", "test")
+            split: get_masked_qm9_dataloader(use_h=args.dataset=="qm9", split=split, batch_size=args.batch_size, pin_memory=False, num_workers=args.dl_num_workers, prefetch_factor=args.dl_prefetch_factor) for split in ("train", "valid", "test")
         }
     else:
         raise NotImplementedError() 

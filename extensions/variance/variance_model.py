@@ -96,53 +96,6 @@ class VarianceEDM(EDM):
         
         pred_eps_coords, pred_eps_features = self.egnn(n_nodes=data.num_atoms, coords=z_coords, features=z_features, edges=data.edges, reduce=data.reduce, demean=data.demean, time_frac=t)
         
-        ### TOOLS TO CALCULATE VANILLA LOSS ###
-        def get_van_loss_t_greater_than_zero(): # for losses L1, ..., LT
-            sq_err_coords = (data.batch_mean @ (eps_coords - pred_eps_coords) ** 2).mean(dim=-1)  # XXX: during training, we take means; during evaluation we take sums
-            sq_err_features = (data.batch_mean @ (eps_features - pred_eps_features) ** 2).mean(dim=-1)  # XXX: during training, we take means; during evaluation we take sums
-            return 0.5 * (sq_err_coords + sq_err_features)
-        
-        def get_van_kl_prior(): # for KL between q(zT | x) and standard normal
-            alf_T = torch.full(size=(data.coords.shape[0], ), fill_value=float(self.schedule["alpha"][-1]), dtype=data.coords.dtype, device=args.device)  # [N]            
-            sig_sq_T = torch.full_like(data.num_atoms, fill_value=float(self.schedule["sigma_squared"][-1]))  # [B]
-            
-            mu_T_coords = alf_T[:, None] * s_coords 
-            mu_T_features = alf_T[:, None] * s_features
-            
-            kl_features = gaussian_KL_batch(mu_T_features, sig_sq_T, torch.zeros_like(mu_T_features), torch.ones_like(sig_sq_T), n_nodes=data.num_atoms, batch_sum=data.batch_sum, subspace=False)
-            kl_coords = gaussian_KL_batch(mu_T_coords, sig_sq_T, torch.zeros_like(mu_T_coords), torch.ones_like(sig_sq_T), n_nodes=data.num_atoms, batch_sum=data.batch_sum, subspace=True)
-            return kl_coords + kl_features
-            
-        def get_van_log_pxh_given_z0_without_constants():
-            # for continuous coords, simply use euclidean distance
-            log_px_given_z0 = -0.5 * (data.batch_mean @ (eps_coords - pred_eps_coords) ** 2).mean(dim=-1)  # XXX: during training we take means, during inference we take sums
-            
-            # for integer one_hot and charges, scale back to integer scaling
-            z_one_hot = z_features[:, :-1]
-            z_charges = z_features[:, -1]
-            us_z_one_hot, us_z_charges = unscale_features(z_one_hot, z_charges)
-            us_sig_one_hot, us_sig_charges = unscale_features(self.schedule["sigma"][0], self.schedule["sigma"][0])
-            
-            # for integer-value charges, find gaussian integral of radius 1 around the deviation
-            us_charge_err_centered = data.charges - us_z_charges
-            
-            log_ph_charges_given_z0 = data.batch_sum @ torch.log(
-                cdf_standard_gaussian((us_charge_err_centered + 0.5) / us_sig_charges)
-                - cdf_standard_gaussian((us_charge_err_centered - 0.5) / us_sig_charges)
-                + 1e-10
-            ).sum(dim=-1)
-            
-            # for one-hot values, find gaussian integral around 1, since one-hot encoded
-            us_one_hot_err_centered = us_z_one_hot - 1.
-            log_ph_one_hot_given_z0_unnormalised = torch.log(
-                cdf_standard_gaussian((us_one_hot_err_centered + 0.5) / us_sig_one_hot)
-                - cdf_standard_gaussian((us_one_hot_err_centered - 0.5) / us_sig_one_hot)
-                + 1e-10
-            )
-            log_ph_one_hot_given_z0 = data.batch_sum @ (log_ph_one_hot_given_z0_unnormalised - torch.logsumexp(log_ph_one_hot_given_z0_unnormalised, dim=-1, keepdim=True)).sum(dim=-1)
-            
-            return log_px_given_z0 + log_ph_one_hot_given_z0 + log_ph_charges_given_z0
-        
         ### TOOLS TO CALCULATE VANILLA VLB
         def get_van_kl_t_greater_than_zero():
             sq_err_coords = (data.batch_sum @ ((eps_coords - pred_eps_coords) ** 2)).sum(dim=-1)  # XXX: during training, we take means; during evaluation we take sums
@@ -188,20 +141,12 @@ class VarianceEDM(EDM):
             return log_px_given_z0 + log_ph_one_hot_given_z0 + log_ph_charges_given_z0
         
         
-        if split=="train":
+        if split == "train":
             eps = torch.concat([eps_coords, eps_features], dim=-1)
             pred_eps = torch.concat([pred_eps_coords, pred_eps_features], dim=-1)
             avr_sq_dist = ((eps - pred_eps) ** 2).mean()
             
-            loss_t_greater_than_zero = get_van_loss_t_greater_than_zero()  # loss for terms L1, ..., LT
-            # loss_term_0 = -get_van_log_pxh_given_z0_without_constants()    # loss for terms L0
-            kl_prior = get_van_kl_prior()  # is negligible if we have done things properly
-            
-            # loss_t = loss_term_0 * t_is_zero + loss_t_greater_than_zero * (1 - t_is_zero)
-            loss_t = loss_t_greater_than_zero
-            
-            loss_training = loss_t + kl_prior - data.size_log_probs
-            return loss_training.mean(), avr_sq_dist
+            return avr_sq_dist
         else:
             eps = torch.concat([eps_coords, eps_features], dim=-1)
             pred_eps = torch.concat([pred_eps_coords, pred_eps_features], dim=-1)
