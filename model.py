@@ -5,13 +5,6 @@ from data import EDMDataloaderItem
 from model_config import EDMConfig, EGCLConfig, EGNNConfig
 from utils.diffusion import cosine_beta_schedule, polynomial_schedule
 
-def fan_out_init(p: nn.Module, skip: list[nn.Module]):
-    if isinstance(p, nn.Linear) and p not in skip:
-        nn.init.kaiming_uniform_(p.weight, mode="fan_out", nonlinearity="relu")
-        p.weight.data *= 0.01
-        if p.bias is not None:
-            nn.init.zeros_(p.bias)
-
 class EGCL(nn.Module):
     def __init__(self, config: EGCLConfig):
         super().__init__()
@@ -27,7 +20,7 @@ class EGCL(nn.Module):
 
         coord_final_layer = nn.Linear(config.hidden_dim, 1, bias=False)
         # make the final layer of the coord_mlp have small initial weights, to avoid the network blowing up when we start training (empirically if we do not include this line, then every layer of the EGCL gives a larger magnitude for coords and features, so by the last layer we have a tensor full of nans)
-        nn.init.xavier_uniform_(coord_final_layer.weight, gain=0.001)
+        nn.init.xavier_uniform_(coord_final_layer.weight, gain=config.hidden_dim ** -0.5)
         # the \(\phi_{x}\) network for coordinate update (same architecture as above but we have an additional projection onto a scalar)
         self.coord_mlp = nn.Sequential(
             #            hi               hj            dij2         aij
@@ -50,9 +43,6 @@ class EGCL(nn.Module):
             nn.Linear(config.hidden_dim, 1),
             nn.Sigmoid()
         )
-        
-        for p in self.modules():
-            fan_out_init(p, skip=[self.coord_mlp[-1]])
 
         # save things
         self.config = config
