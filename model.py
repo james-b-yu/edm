@@ -135,7 +135,7 @@ class BaseEDM(nn.Module):
         super().__init__()
         self.config = config
         self.schedule = cosine_beta_schedule(config.num_steps, config.device) if config.schedule_type == "cosine" else polynomial_schedule(config.num_steps, config.device)
-        self.to(config.device)
+        self.to(device=config.device)
         
     def scale_inputs(self, coord, one_hot, charge):
         """given inputs, scale them to prepare for inputs according to config
@@ -153,7 +153,7 @@ class EDM(BaseEDM):
     def __init__(self, config: EDMConfig):
         super().__init__(config)
         self.egnn = EGNN(config)
-        self.to(config.device)
+        self.to(device=config.device)
         
     def get_eps_and_predicted_eps(self, data: EDMDataloaderItem, time_int: torch.Tensor | int):
         """

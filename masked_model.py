@@ -128,7 +128,7 @@ class MaskedEDM(BaseEDM):
     def __init__(self, config: EDMConfig):
         super().__init__(config)
         self.egnn = MaskedEGNN(config)
-        self.to(config.device)
+        self.to(device=config.device)
         
     def get_eps_and_predicted_eps(self, coord: torch.Tensor, one_hot: torch.Tensor, charge: torch.Tensor, time_int: torch.Tensor | int, node_mask: torch.Tensor, edge_mask: torch.Tensor):
         """
