@@ -4,21 +4,17 @@ from typing import Literal
 import torch
 from torch import nn
 from data import EDMDataloaderItem
-from model import EGNN, EGNNConfig
+from model import EDM, EGNN, EDMConfig
 from utils.diffusion import cdf_standard_gaussian, cosine_beta_schedule, polynomial_schedule, gaussian_KL, gaussian_KL_batch, scale_features, unscale_features
 
-class VarianceDiffusion(nn.Module):
-    def __init__(self, egnn_config: EGNNConfig, num_steps: int, schedule: Literal["cosine", "polynomial"], device: torch.device|str):
-        super().__init__()
+class VarianceEDM(EDM):
+    def __init__(self, config: EDMConfig):
+        super().__init__(config)
         
-        self.egnn = EGNN(egnn_config)
-        self.num_steps = num_steps
-        self.schedule = cosine_beta_schedule(num_steps, device) if schedule == "cosine" else polynomial_schedule(num_steps, device)
+        self.V_h = nn.Parameter(0.25 + 0.5 * torch.rand(size=(config.num_steps, config.num_atom_types + 1, )))  # [num_steps, num_features] for one_hot and charges and each time step
+        self.V_x = nn.Parameter(0.25 + 0.5 * torch.rand(size=(config.num_steps, )))  # [num_steps] for coords
         
-        self.V_h = nn.Parameter(0.25 + 0.5 * torch.rand(size=(self.egnn.config.num_atom_types + 2, )))
-        self.V_x = nn.Parameter(torch.tensor((1.)))
-        
-        self.to(device=device)
+        self.to(device=config.device)
         
     def gamma_x(self, time: int | torch.Tensor):
         """get generative model backward variance at time t for coords
@@ -215,6 +211,6 @@ class VarianceDiffusion(nn.Module):
             vlb_zero = -get_van_vlb_zeroth_term()
             const0 = (data.num_atoms - 1.) * 3 * (0.5 * log(2 * torch.pi) + torch.log(sig_0) - torch.log(alf_0)) # = log Z in the paper
             
-            vlb_est = const0 + vlb_zero + self.num_steps * kl_t_greater_than_zero
+            vlb_est = const0 + vlb_zero + self.config.num_steps * kl_t_greater_than_zero
             
             return vlb_est.mean(), avr_sq_dist

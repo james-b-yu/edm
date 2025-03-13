@@ -5,140 +5,18 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "playground.py",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "${workspaceFolder}/playground.py",
-            "console": "integratedTerminal"
-        },
-        {
-            "name": "DEBUG DEMO OWN ARCH",
+            "name": "DEBUG VARIANCE",
             "type": "debugpy",
             "request": "launch",
             "program": "${workspaceFolder}/run.py",
             "console": "integratedTerminal",
             "args": [
-                "--extension=vanilla",
+                "--extension=variance",
                 "--no-wandb",
-                "--pipeline=demo",
-                "--checkpoint=./checkpoints/arch",
-                "--device=cuda",
-                "--use-non-masked"
+                "--checkpoint=./checkpoints/variance_with_h",
+                "--no-restore-optim",
+                "--no-restore-scheduler",
             ]
         },
-        {
-            "name": "DEBUG DEMO",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "${workspaceFolder}/run.py",
-            "console": "integratedTerminal",
-            "args": [
-                "--no-wandb",
-                "--pipeline=demo",
-                "--checkpoint=./checkpoints/arch"
-            ]
-        },
-        {
-            "name": "DEBUG PRETRAINED",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "${workspaceFolder}/run.py",
-            "console": "integratedTerminal",
-            "args": [
-                "--checkpoint",
-                "./checkpoints/new_arch_1em5_lr_w_sch_val/",
-                "--run-name",
-                "debug-during-training",
-                "--start-epoch",
-                "640",
-                "--pipeline=valid",
-                "--batch-size=64",
-                "--noise-schedule=polynomial"
-            ]
-        },
-        {
-            "name": "VALID",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "${workspaceFolder}/run.py",
-            "console": "integratedTerminal",
-            "args": [
-                "--checkpoint",
-                "./checkpoints/new_arch_lr_with_scheduler/",
-                "--run-name",
-                "new_arch_lr_with_scheduler_and_valid",
-                "--start-epoch",
-                "577"
-            ]
-        },
-        {
-            "name": "Resume New Arch",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "${workspaceFolder}/run.py",
-            "console": "integratedTerminal",
-            "args": [
-                "--checkpoint",
-                "./checkpoints/new_arch_lr_1em4/",
-                "--run-name",
-                "new_arch_lr_with_scheduler",
-                "--no-restore-scheduler-state",
-                "--force-start-lr",
-                "5e-5"
-            ]
-        },
-        {
-            "name": "QM9 New",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "${workspaceFolder}/run.py",
-            "console": "integratedTerminal",
-            "args": [
-                "--extension",
-                "variance",
-                "--run-name",
-                "debug_new_arch",
-            ]
-        },
-        {
-            "name": "Debug current run",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "${workspaceFolder}/run.py",
-            "console": "integratedTerminal",
-            "args": [
-                "--checkpoint",
-                "./checkpoints/partly_pretrained_vanilla_lower_lr_bak",
-                "--run-name",
-                "debug_partly_pretrained_vanilla_lower_lr",
-                "--start-epoch",
-                "535"
-            ]
-        },
-        {
-            "name": "Debug Continue",
-            "type": "debugpy",
-            "request": "launch",
-            "program": "${workspaceFolder}/run.py",
-            "console": "integratedTerminal",
-            "args": [
-                "--checkpoint",
-                "./checkpoints/partly_pretrained_vanilla_lower_lr/",
-                "--lr",
-                "1e-5",
-                "--run-name",
-                "partly_pretrained_vanilla_lower_lr"
-            ]
-        },
-        {
-            "name": "Debug PyTest",
-            "type": "debugpy",
-            "request": "launch",
-            "module": "pytest",
-            "args": [
-                "tests",
-                "-s" // do not capture stdout, so that we can see print statements, etc.
-            ]
-        }
     ]
 }
