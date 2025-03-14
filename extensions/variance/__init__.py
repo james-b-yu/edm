@@ -4,7 +4,7 @@ import warnings
 
 import torch
 import wandb.wandb_run
-from .train import enter_train_loop
+from .train import enter_train_loop, one_valid_epoch
 from model_config import get_config_from_args
 from .variance_model import VarianceEDM
 from torch.utils.data import DataLoader
@@ -48,7 +48,8 @@ def run(args: Namespace, dataloaders: dict[str, DataLoader], wandb_run: None|Run
     if args.pipeline == "train":
         enter_train_loop(model, model_ema, optim, scheduler, args, dataloaders["train"], dataloaders["valid"], wandb_run)
     elif args.pipeline == "valid":
-        raise NotImplementedError
+        one_valid_epoch(args, "valid", 0, dataloaders["valid"], model)
+        one_valid_epoch(args, "valid", 0, dataloaders["valid"], model_ema)
     elif args.pipeline == "sample":
         raise NotImplementedError
     else:

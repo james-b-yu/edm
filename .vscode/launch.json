@@ -5,6 +5,19 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "DEBUG VLB",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/run.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--extension=variance",
+                "--pipeline=valid",
+                "--checkpoint=./checkpoints/variance_with_h",
+                "--no-wandb"
+            ]
+        },
+        {
             "name": "DEBUG VARIANCE",
             "type": "debugpy",
             "request": "launch",
@@ -12,10 +25,7 @@
             "console": "integratedTerminal",
             "args": [
                 "--extension=variance",
-                "--no-wandb",
-                "--checkpoint=./checkpoints/variance_with_h",
-                "--no-restore-optim",
-                "--no-restore-scheduler",
+                "--no-wandb"
             ]
         },
     ]

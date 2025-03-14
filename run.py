@@ -39,7 +39,9 @@ if __name__ == "__main__":
         wandb_run = wandb.init(
             project=args.wandb_project,
             name=args.run_name,
-            config=vars(args)  
+            config=vars(args),
+            id=args.run_id,
+            resume="allow",
         )
     
     if args.extension == "vanilla":

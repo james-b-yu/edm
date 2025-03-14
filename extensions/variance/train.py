@@ -14,10 +14,10 @@ from utils.diffusion import Queue, gradient_clipping, scale_features
 
 from .variance_model import VarianceEDM
 
-def one_train_epoch(args: Namespace, epoch: int, dl: DataLoader, model: VarianceEDM, gradnorm_queue: Queue, optim: torch.optim.Optimizer, wandb_run: None|Run):
+def one_train_epoch(args: Namespace, epoch: int, dl: DataLoader, model: VarianceEDM, model_ema: VarianceEDM, gradnorm_queue: Queue, optim: torch.optim.Optimizer, wandb_run: None|Run):
     model.train()
     
-    dists: list[float] = []
+    losses: list[float] = []
     grad_norms: list[float] = []
     dl_len = len(dl)
     
@@ -27,28 +27,30 @@ def one_train_epoch(args: Namespace, epoch: int, dl: DataLoader, model: Variance
 
         optim.zero_grad()
     
-        dist = model.calculate_loss(args=args, split="train", data=data)
-        assert isinstance(dist, torch.Tensor)
-        dist.backward()
+        train_loss = model.calculate_loss(args=args, split="train", data=data)
+        assert isinstance(train_loss, torch.Tensor)
+        train_loss.backward()
         
         if args.clip_grad:
             grad_norm = gradient_clipping(model, gradnorm_queue, max=args.max_grad_norm)
         
         optim.step()
         
-        pbar.set_description(f"(train) Total loss: {dist:.2f} Grad norm: {grad_norm:.2f}")
+        _update_ema(args.ema_beta, model, model_ema)
+        
+        pbar.set_description(f"(train) Total loss: {train_loss:.2f} Grad norm: {grad_norm:.2f}")
         
         if wandb_run is not None:
             wandb_run.log({
-                "train_batch_dist": dist,
+                "train_batch_loss": train_loss,
                 "train_batch_grad_norm": grad_norm,
                 "epoch": float(epoch) + idx/dl_len
             })
             
-        dists.append(float(dist))
+        losses.append(float(train_loss))
         grad_norms.append(float(grad_norm))
         
-    return sum(dists) / dl_len, sum(grad_norms) / dl_len
+    return sum(losses) / dl_len, sum(grad_norms) / dl_len
 
 @torch.no_grad()
 def one_valid_epoch(args: Namespace, split: Literal["valid", "test"], epoch: int, dl: DataLoader, model: VarianceEDM):
@@ -78,11 +80,8 @@ def enter_train_loop(model: VarianceEDM, model_ema: VarianceEDM, optim: torch.op
     
     for epoch in tqdm(range(args.start_epoch, args.end_epoch), leave=False, unit="epoch"):
         # first train
-        train_dist, train_grad_norm = one_train_epoch(args, epoch, train_dl, model, gradnorm_queue, optim, wandb_run)
-        scheduler.step(train_dist)  # type: ignore
-        
-        # now update model_ema
-        _update_ema(args.ema_beta, model, model_ema)
+        train_loss, train_grad_norm = one_train_epoch(args, epoch, train_dl, model, model_ema, gradnorm_queue, optim, wandb_run)
+        scheduler.step(train_loss)  # type: ignore
         
         # now eval
         with torch.no_grad():
@@ -95,7 +94,7 @@ def enter_train_loop(model: VarianceEDM, model_ema: VarianceEDM, optim: torch.op
         # now log things
         if wandb_run is not None:
             wandb_run.log({
-                "train_dist": train_dist,
+                "train_loss": train_loss,
                 "train_grad_norm": train_grad_norm,
                 "valid_vlb": valid_vlb,
                 "valid_dist": valid_dist,

@@ -1,3 +1,4 @@
+from dataclasses import dataclass
 from functools import cache
 import torch
 import numpy as np
@@ -20,6 +21,88 @@ def default_noise_schedule(num_steps: int, device: torch.device|str):
         
         return {"alpha": alpha_t, "sigma": sigma_t}
     
+def clip_noise_schedule(alphas2, clip_value=0.001):
+    """
+    COPIED FROM https://github.com/ehoogeboom/e3_diffusion_for_molecules/blob/main/equivariant_diffusion/en_diffusion.py#L24
+    For a noise schedule given by alpha^2, this clips alpha_t / alpha_t-1. This may help improve stability during
+    sampling.
+    """
+    alphas2 = np.concatenate([np.ones(1), alphas2], axis=0)
+
+    alphas_step = (alphas2[1:] / alphas2[:-1])
+
+    alphas_step = np.clip(alphas_step, a_min=clip_value, a_max=1.)
+    alphas2 = np.cumprod(alphas_step, axis=0)
+
+    return alphas2    
+
+@dataclass
+class ScheduleInfo:
+    alpha: torch.Tensor
+    alpha_squared: torch.Tensor
+    alpha_squared_L: torch.Tensor  # alpha_squared evaluated at t-1 -- first value is padded at 1
+    sigma: torch.Tensor
+    sigma_squared: torch.Tensor
+    sigma_L: torch.Tensor
+    sigma_squared_L: torch.Tensor
+    beta: torch.Tensor  # var(t | t-1)
+    rev_beta: torch.Tensor  # var(t-1 | t)
+    
+    def __getitem__(self, key):
+        # Check if the key exists in the dataclass' __dict__
+        if key not in self.__dict__:
+            raise KeyError(f"'{key}' is not a valid field")
+        
+        # If the key exists, return the corresponding value
+        return self.__dict__[key]
+
+def _get_schedule_from_alpha_squared_np(alpha_squared_np: np.ndarray, device: torch.device|str):
+    alpha_squared_np_L = np.concat([np.array([1], dtype=np.longdouble), alpha_squared_np[:-1]])
+    sigma_squared_np = 1. - alpha_squared_np
+    sigma_squared_np_L = 1. - alpha_squared_np_L
+    alpha_squared_ratio_np = alpha_squared_np / alpha_squared_np_L
+    beta_np = sigma_squared_np - alpha_squared_ratio_np * sigma_squared_np_L  # variance of t given t - 1
+    rev_beta_np = sigma_squared_np_L - alpha_squared_ratio_np * sigma_squared_np_L ** 2 / sigma_squared_np
+    rev_beta_np[0] = 0.5 * beta_np[0]  # fill dummy value for zeroth term but still allow for variation
+    
+    alpha = torch.from_numpy((alpha_squared_np ** 0.5).astype(np.float32)).to(device=device)
+    alpha_squared = torch.from_numpy(alpha_squared_np.astype(np.float32)).to(device=device)
+    alpha_squared_L = torch.from_numpy(alpha_squared_np_L.astype(np.float32)).to(device=device)
+    sigma = torch.from_numpy((sigma_squared_np ** 0.5).astype(np.float32)).to(device=device)
+    sigma_squared = torch.from_numpy(sigma_squared_np.astype(np.float32)).to(device=device)
+    sigma_L = torch.from_numpy((sigma_squared_np_L ** 0.5).astype(np.float32)).to(device=device)
+    sigma_squared_L = torch.from_numpy(sigma_squared_np_L.astype(np.float32)).to(device=device)
+    beta = torch.from_numpy(beta_np.astype(np.float32)).to(device=device)
+    rev_beta = torch.from_numpy(rev_beta_np.astype(np.float32)).to(device=device)
+    
+    return ScheduleInfo(
+        alpha=alpha,
+        alpha_squared=alpha_squared,
+        alpha_squared_L=alpha_squared_L,
+        sigma=sigma,
+        sigma_squared=sigma_squared,
+        sigma_L=sigma_L,
+        sigma_squared_L=sigma_squared_L,
+        beta=beta,
+        rev_beta=rev_beta,
+    )
+
+def polynomial_schedule(timesteps: int, device: torch.device|str, power=2., s=1e-5):
+    """
+    ADAPTED FROM https://github.com/ehoogeboom/e3_diffusion_for_molecules/blob/main/equivariant_diffusion/en_diffusion.py#L39
+    A noise schedule based on a simple polynomial equation: 1 - x^power.
+    """
+    steps = timesteps + 1
+    x = np.linspace(0, steps, steps)
+    alpha_squared_np = (1 - np.power(x / steps, power))**2
+
+    alpha_squared_np = clip_noise_schedule(alpha_squared_np, clip_value=0.001)
+
+    precision = 1 - 2 * s
+
+    alpha_squared_np = precision * alpha_squared_np + s
+    
+    return _get_schedule_from_alpha_squared_np(alpha_squared_np, device)
     
 def cosine_beta_schedule(timesteps, device: torch.device|str, s=0.008):
     """
@@ -39,56 +122,8 @@ def cosine_beta_schedule(timesteps, device: torch.device|str, s=0.008):
     
     
     alpha_bar = np.cumprod(alpha_squared_transition, axis=0)
-    betas_sigma_transition = (1. - alpha_bar[:-1]) / (1. - alpha_bar[1:]) * betas_transition[1:]
     
-    return {
-        "alpha": torch.from_numpy((alpha_bar ** 0.5).astype(np.float32)).to(device=device),
-        "alpha_squared": torch.from_numpy((alpha_bar).astype(np.float32)).to(device=device),
-        "alpha_L_squared": torch.from_numpy(np.concat([np.array([1], dtype=np.longdouble), alpha_bar[:-1]]).astype(np.float32)).to(device=device),  # \alpha_{t-1} with artificial 1 at t=0
-        "sigma": torch.from_numpy(((1 - alpha_bar) ** 0.5).astype(np.float32)).to(device=device),
-        "sigma_squared": torch.from_numpy(((1 - alpha_bar)).astype(np.float32)).to(device=device),
-        "beta": torch.from_numpy(betas_transition.astype(np.float32)).to(device=device),   # transition variances
-        "beta_squared": torch.from_numpy((betas_transition ** 2).astype(np.float32)).to(device=device),   # the SQUARE of the transition variances
-        "beta_sigma": torch.from_numpy(np.concatenate([betas_transition[0, None], betas_sigma_transition], axis=0).astype(np.float32)).to(device=device),  # copy zeroth element of beta into beta_sigma
-    }
-    
-def clip_noise_schedule(alphas2, clip_value=0.001):
-    """
-    COPIED FROM https://github.com/ehoogeboom/e3_diffusion_for_molecules/blob/main/equivariant_diffusion/en_diffusion.py#L24
-    For a noise schedule given by alpha^2, this clips alpha_t / alpha_t-1. This may help improve stability during
-    sampling.
-    """
-    alphas2 = np.concatenate([np.ones(1), alphas2], axis=0)
-
-    alphas_step = (alphas2[1:] / alphas2[:-1])
-
-    alphas_step = np.clip(alphas_step, a_min=clip_value, a_max=1.)
-    alphas2 = np.cumprod(alphas_step, axis=0)
-
-    return alphas2    
-
-def polynomial_schedule(timesteps: int, device: torch.device|str, power=2., s=1e-5):
-    """
-    ADAPTED FROM https://github.com/ehoogeboom/e3_diffusion_for_molecules/blob/main/equivariant_diffusion/en_diffusion.py#L39
-    A noise schedule based on a simple polynomial equation: 1 - x^power.
-    """
-    steps = timesteps + 1
-    x = np.linspace(0, steps, steps)
-    alphas2 = (1 - np.power(x / steps, power))**2
-
-    alphas2 = clip_noise_schedule(alphas2, clip_value=0.001)
-
-    precision = 1 - 2 * s
-
-    alphas2 = precision * alphas2 + s
-
-    return {
-        "alpha": torch.from_numpy((alphas2 ** 0.5).astype(np.float32)).to(device=device),
-        "alpha_squared": torch.from_numpy(alphas2.astype(np.float32)).to(device=device),
-        "alpha_L_squared": torch.from_numpy(np.concat([np.array([1], dtype=np.longdouble), alphas2[:-1]]).astype(np.float32)).to(device=device),  # \alpha_{t-1} with artificial 1 at t=0
-        "sigma": torch.from_numpy(((1. - alphas2) ** 0.5).astype(np.float32)).to(device=device),
-        "sigma_squared": torch.from_numpy((1. - alphas2).astype(np.float32)).to(device=device),
-    }
+    return _get_schedule_from_alpha_squared_np(alpha_bar, device)
     
 def scale_features(one_hot: torch.Tensor, charges: torch.Tensor):
     """use the scaling implmeneted by the paper
