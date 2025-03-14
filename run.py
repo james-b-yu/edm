@@ -40,7 +40,7 @@ if __name__ == "__main__":
             project=args.wandb_project,
             name=args.run_name,
             config=vars(args),
-            id=args.run_id,
+            id=args.run_id if args.run_id != "None" else None,
             resume="allow",
         )
     
