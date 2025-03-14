@@ -166,9 +166,9 @@ class MaskedEDM(nn.Module):
         given ground truth data, and (potentially random) time generate epsilons and perform one evaluation of the model to predict these epsilons
 
         Args:
-            coord (torch.Tensor): self-explanatory
-            one_hot (torch.Tensor): self-explanatory
-            charge (torch.Tensor): self-explanatory
+            coord (torch.Tensor): 3D coordinates of atom
+            one_hot (torch.Tensor): one hot encoding of the atom type (H, C, O, N, F)
+            charge (torch.Tensor): charge of atom
             time_int (torch.Tensor | int): either an integer, in which case all molecules in the batch will have the same time step, or a long-tensor of shape [batch_size]. note this is an INTEGER from 0 to num_steps, inclusive
             node_mask (torch.Tensor): get these from the dataloader
             edge_mask (torch.Tensor): get these from the dataloader
@@ -198,6 +198,12 @@ class MaskedEDM(nn.Module):
         (pred_eps_coord, pred_eps_feat) = self.egnn(z_coord, z_feat, time_frac, node_mask, edge_mask)
     
         return (eps_coord, eps_feat), (pred_eps_coord, pred_eps_feat)
+
+    def forward(self, coord, one_hot, charge, time_int, node_mask, edge_mask):
+        """Defining a forward pass for EDM, to integrate eval script more easily"""
+        (eps_coord, eps_feat), (pred_eps_coord, pred_eps_feat) = self.get_eps_and_predicted_eps(coord, one_hot, charge, time_int, node_mask, edge_mask)
+        return pred_eps_coord, pred_eps_feat
+
     
 def get_config_from_args(args: Namespace, num_atom_types: int):
     return MaskedEDMConfig(
