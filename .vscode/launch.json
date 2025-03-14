@@ -5,6 +5,17 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "DEBUG CHECKPOINT",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/run.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--checkpoint=./checkpoints/edm_run",
+                "--no-wandb",
+            ]
+        },
+        {
             "name": "DEBUG VLB",
             "type": "debugpy",
             "request": "launch",

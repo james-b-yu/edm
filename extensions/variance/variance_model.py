@@ -115,8 +115,8 @@ class VarianceEDM(EDM):
         ### TOOLS TO CALCULATE TRAIN LOSS
         def get_coords_zeroth_term_forced():
             # used during training to correctly fit gamma_x_0
-            coord_const_term = -0.5 * dim_coords * (log(2 * torch.pi) + gamma_0_coords.log())
-            coord_fit_term = -0.5 * data.batch_sum @ ((eps_coords - pred_eps_coords) ** 2).sum(dim=-1) * sig_sq_0 / alf_sq_0 / gamma_0_coords
+            coord_const_term = 0.5 * dim_coords * (log(2 * torch.pi) + gamma_0_coords.log())
+            coord_fit_term = 0.5 * data.batch_sum @ ((eps_coords - pred_eps_coords) ** 2).sum(dim=-1) * sig_sq_0 / alf_sq_0 / gamma_0_coords
             return coord_const_term + coord_fit_term
         
         def get_kl_t_greater_than_zero():
