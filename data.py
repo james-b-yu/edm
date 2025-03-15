@@ -15,7 +15,7 @@ from utils.diffusion import demean_using_mask
 from utils.files import check_hash_file, hash_file
 from utils.qm9 import charge_to_idx, ensure_qm9_raw_data, ensure_qm9_raw_excluded, ensure_qm9_raw_splits, ensure_qm9_raw_thermo, ensure_qm9_processed
 
-from qm9_meta import QM9_WITH_H, QM9_WITHOUT_H
+from dataset_info import DATASET_INFO
 
 @dataclass
 class EDMDatasetItem:
@@ -155,11 +155,12 @@ class EDMDataset(ABC, td.Dataset):
 
 class QM9Dataset(EDMDataset):
     def __init__(self, use_h: bool, split: Literal["train", "valid", "test"]):
+        ds_info = DATASET_INFO["qm9"] if use_h else DATASET_INFO["qm9_no_h"]
         super().__init__(
-            num_atom_types=QM9_WITH_H["num_atom_types"] if use_h else QM9_WITHOUT_H["num_atom_types"],
-            max_nodes=QM9_WITH_H["largest_molecule_size"] if use_h else QM9_WITHOUT_H["largest_molecule_size"],
-            atom_types=QM9_WITH_H["atom_types"] if use_h else QM9_WITHOUT_H["atom_types"],
-            size_histogram=QM9_WITH_H["molecule_size_histogram"] if use_h else QM9_WITHOUT_H["molecule_size_histogram"]
+            num_atom_types=ds_info["num_atom_types"],
+            max_nodes=ds_info["largest_molecule_size"],
+            atom_types=ds_info["atom_types"],
+            size_histogram=ds_info["molecule_size_histogram"]
         )
         
         assert split in ["train", "valid", "test"]
@@ -194,27 +195,49 @@ class QM9Dataset(EDMDataset):
             size_log_prob = size_log_prob
         )
 
+def get_util_tensors(n_nodes: torch.Tensor):
+    """given a tensor of molecule sizes, return utility tensors to work with flattened molecules
+
+    Args:
+        n_nodes (torch.Tensor): tensor of size [B] where B is the number of molecules, and dtype torch.long, where each entry is the size of a molecule
+
+    Returns:
+        tuple[torch.Tensor, ...]: edges, reduce, demean, expand_idx, batch_mean, batch_sum. See EDMDataloaderItem
+    """
+    assert n_nodes.dim() == 1 and n_nodes.dtype == torch.long, "must input a long tensor of size [B] where B is the number of molecules"
+    device = n_nodes.device
+    _n_nodes_cumsum = torch.cumsum(torch.cat([torch.tensor([0], dtype=torch.long, device=device), n_nodes]), dim=0)
+    edges = torch.cat([torch.cartesian_prod(torch.arange(b_n.item(), dtype=torch.long, device=device), torch.arange(b_n.item(), dtype=torch.long, device=device)) + _n_nodes_cumsum[b] for b, b_n in enumerate(n_nodes)], dim=0)
+    reduce = torch.block_diag(*[torch.block_diag(*[torch.ones((int(n), ), device=device).scatter_(0, torch.tensor([m], device=device), 0) for m in range(n)]) for n in n_nodes])
+    demean = torch.block_diag(*[torch.eye(int(n), dtype=torch.float32, device=device) - (torch.ones((int(n), int(n)), dtype=torch.float32, device=device) / n) for n in n_nodes])
+    expand_idx = torch.cat([torch.ones(size=(int(n), ), dtype=torch.long, device=device) * idx for idx, n in enumerate(n_nodes)])
+    batch_mean = torch.block_diag(*[(1/float(n)) * torch.ones(size=(1, int(n)), dtype=torch.float32, device=device) for n in n_nodes])
+    batch_sum = torch.block_diag(*[torch.ones(size=(1, int(n)), dtype=torch.float32, device=device) for n in n_nodes])
+    
+    assert isinstance(edges, torch.Tensor)
+    assert isinstance(reduce, torch.Tensor)
+    assert isinstance(demean, torch.Tensor)
+    assert isinstance(expand_idx, torch.Tensor)
+    assert isinstance(batch_mean, torch.Tensor)
+    assert isinstance(batch_sum, torch.Tensor)
+    
+    return edges, reduce, demean, expand_idx, batch_mean, batch_sum
+
 def _collate_fn(data: list[EDMDatasetItem]):
-        n_nodes = torch.tensor([d.n_nodes for d in data], dtype=torch.int64)
+        n_nodes = torch.tensor([d.n_nodes for d in data], dtype=torch.long)
         coords = torch.cat([d.coords for d in data])
         one_hot = torch.cat([d.one_hot for d in data])
         charges = torch.cat([d.charges for d in data])[:, None]
         size_log_probs = torch.tensor([d.size_log_prob for d in data], dtype=torch.float32)
 
-        _n_nodes_cumsum = torch.cumsum(torch.cat([torch.tensor([0], dtype=torch.int64), n_nodes]), dim=0)
-
-        edges = torch.cat([torch.cartesian_prod(torch.arange(b_n.item(), dtype=torch.int64), torch.arange(b_n.item(), dtype=torch.int64)) + _n_nodes_cumsum[b] for b, b_n in enumerate(n_nodes)], dim=0)
-        reduce = torch.block_diag(*[torch.block_diag(*[torch.ones((int(n), )).scatter_(0, torch.tensor([m]), 0) for m in range(n)]) for n in n_nodes])
-        demean = torch.block_diag(*[torch.eye(int(n), dtype=torch.float32) - (torch.ones((int(n), int(n)), dtype=torch.float32) / n) for n in n_nodes])
-        expand_idx = torch.cat([torch.ones(size=(int(n), ), dtype=torch.long) * idx for idx, n in enumerate(n_nodes)])
-        batch_mean = torch.block_diag(*[(1/float(n)) * torch.ones(size=(1, int(n)), dtype=torch.float32) for n in n_nodes])
-        batch_sum = torch.block_diag(*[torch.ones(size=(1, int(n)), dtype=torch.float32) for n in n_nodes])
+        edges, reduce, demean, expand_idx, batch_mean, batch_sum = get_util_tensors(n_nodes)
+        
         coords = demean @ coords  # immediately demean the coords
 
         return EDMDataloaderItem(num_atoms=n_nodes, coords=coords, one_hot=one_hot, charges=charges, edges=edges, reduce=reduce, batch_mean=batch_mean, batch_sum=batch_sum, demean=demean, expand_idx=expand_idx, size_log_probs=size_log_probs)
 
 def _masked_collate_fn(data: list[EDMDatasetItem]):
-    n_nodes = torch.tensor([d.n_nodes for d in data], dtype=torch.int64)
+    n_nodes = torch.tensor([d.n_nodes for d in data], dtype=torch.long)
     size_log_probs = torch.tensor([d.size_log_prob for d in data], dtype=torch.float32)
     max_n_nodes = int(n_nodes.max())
     coords  = torch.nn.utils.rnn.pad_sequence([d.coords for d in data], batch_first=True, padding_value=0)
