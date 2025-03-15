@@ -38,7 +38,7 @@ if __name__ == "__main__":
         raise NotImplementedError() 
 
     wandb_run = None
-    if args.use_wandb:
+    if args.pipeline == "train" and args.use_wandb:
         wandb.login()
         wandb_run = wandb.init(
             project=args.wandb_project,
