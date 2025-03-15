@@ -5,6 +5,8 @@ This script is used to perform all running
 
 import sys
 import warnings
+
+import torch
 from data import get_qm9_dataloader, get_masked_qm9_dataloader
 sys.path.append(".")
 from os import path
@@ -16,6 +18,8 @@ from args import args, parser
 from extensions import vanilla, variance
 
 if __name__ == "__main__":
+    torch.manual_seed(args.seed)
+    
     if args.checkpoint is not None:
         try:
             with open(path.join(args.checkpoint, "args.pkl"), "rb") as f:
