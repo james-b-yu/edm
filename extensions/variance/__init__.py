@@ -53,15 +53,16 @@ def run(args: Namespace, dataloaders: dict[str, DataLoader], wandb_run: None|Run
     
     if args.pipeline == "train":
         enter_train_loop(model, model_ema, optim, scheduler, args, dataloaders["train"], dataloaders["valid"], wandb_run)
-    elif args.pipeline == "valid":
+    elif args.pipeline == "valid" or args.pipeline == "test":
         model.eval()
         model_ema.eval()
+        split = args.pipeline
 
         print(f"Performing {args.reruns} (noisy) validation epoch(s) on 'model.pth'")
-        mean, std = enter_valid_loop(model, "valid", args, dataloaders["valid"])
+        mean, std = enter_valid_loop(model, split, args, dataloaders[split])
         if ema_loaded:
             print(f"Performing {args.reruns} (noisy) validation epoch(s) on 'model_ema.pth'")
-            ema_mean, ema_std = enter_valid_loop(model_ema, "valid", args, dataloaders["valid"])
+            ema_mean, ema_std = enter_valid_loop(model_ema, split, args, dataloaders[split])
         
         print(f"mean (std) for 'model.pth':     vlb: {mean:.2f} ({std:.2f})")
         if ema_loaded:
