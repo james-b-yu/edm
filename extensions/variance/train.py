@@ -81,12 +81,14 @@ def enter_train_loop(model: VarianceEDM, model_ema: VarianceEDM, optim: torch.op
     for epoch in tqdm(range(args.start_epoch, args.end_epoch), leave=False, unit="epoch"):
         # first train
         train_loss, train_grad_norm = one_train_epoch(args, epoch, train_dl, model, model_ema, gradnorm_queue, optim, wandb_run)
-        scheduler.step(train_loss)  # type: ignore
         
         # now eval
         with torch.no_grad():
             valid_vlb, valid_dist = one_valid_epoch(args, "valid", epoch, valid_dl, model)
             ema_valid_vlb, ema_valid_dist = one_valid_epoch(args, "valid", epoch, valid_dl, model_ema)
+            
+        # step the scheduler
+        scheduler.step(valid_vlb)  # type: ignore
         
         # now save things
         _save_checkpoint(args, epoch, model, model_ema, optim, scheduler)
