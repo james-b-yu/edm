@@ -48,7 +48,7 @@ class VarianceEDM(EDM):
         res = self.V_h[time].exp()
         
         if isinstance(time, int):
-            res.squeeze_()
+            res = res.squeeze()
         return res
         
         
