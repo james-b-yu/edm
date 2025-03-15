@@ -77,7 +77,7 @@ def run(args: Namespace, dataloaders: dict[str, DataLoader], wandb_run: None|Run
         for i in range(ceil(num_samples / args.batch_size)):
             B = min(args.batch_size, num_samples - len(samples))
             num_atoms = atom_sizes[torch.multinomial(atom_probs, B, replacement=True)]
-            coords, one_hot, charges = model.sample(num_atoms)
+            coords, one_hot, charges = model.sample_flattened(num_atoms)
             
             # separate the molecules and append to samples
             batch_idx = 0

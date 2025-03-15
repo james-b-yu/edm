@@ -290,7 +290,15 @@ class VarianceEDM(EDM):
             return vlb_est.mean(), avr_sq_dist
         
     @torch.no_grad()
-    def sample(self, num_atoms: torch.Tensor):
+    def sample_flattened(self, num_atoms: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Given a an array of molecule sizes, return a sampled molecules in flattened format
+
+        Args:
+            num_atoms (torch.Tensor): [B] tensor (dtype=torch.long)
+
+        Returns:
+            tuple[torch.Tensor, torch.Tensor, torch.Tensor]: coords, one_hot, charges in flattened representation
+        """
         assert num_atoms.dtype == torch.long and num_atoms.dim() == 1, "You must provide a tensor of length [B] and type long, where B is the number of molecules to create"
         
         B = int(num_atoms.size(0))  # number of molecules to mkae 
@@ -337,6 +345,6 @@ class VarianceEDM(EDM):
         
         one_hot, charges = feats[:, :-1], feats[:, -1]
         coords, one_hot, charges = self.unscale_inputs(coords, one_hot, charges)
+        one_hot, charges = one_hot.round().to(dtype=torch.long), charges.round().to(dtype=torch.long)
         
-        # TODO: round feats!
         return coords, one_hot, charges
