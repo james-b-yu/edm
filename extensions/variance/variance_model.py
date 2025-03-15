@@ -12,8 +12,11 @@ class VarianceEDM(EDM):
     def __init__(self, config: EDMConfig):
         super().__init__(config)
         
-        self.V_h = nn.Parameter(0.25 + 0.5 * torch.rand(size=(config.num_steps + 1, config.num_atom_types + 1, )))  # [num_steps, num_features] for one_hot and charges and each time step
-        self.V_x = nn.Parameter(0.25 + 0.5 * torch.rand(size=(config.num_steps + 1, )))  # [num_steps] for coords
+        # save log representations of gammas
+        # initialisation will be halfway between beta and rev_beta
+        init_v = 0.5 * self.schedule.rev_beta + 0.5 * self.schedule.beta
+        self.V_h = nn.Parameter(torch.clone(init_v[:, None].repeat(1, config.num_atom_types + 1)).log())  # [num_steps, num_features] for one_hot and charges
+        self.V_x = nn.Parameter(torch.clone(init_v).log())  # [num_steps] for coords
         
         self.to(device=config.device)
         
@@ -27,7 +30,7 @@ class VarianceEDM(EDM):
             torch.Tensor: [time] vector of variance
         """
         
-        res = (self.V_x[time] * self.schedule.beta[time].log() + (1. - self.V_x[time]) * self.schedule.rev_beta[time].log()).exp()
+        res = self.V_x[time].exp()
         
         if isinstance(time, int):
             res = res.squeeze()
@@ -42,7 +45,7 @@ class VarianceEDM(EDM):
         Returns:
             torch.Tensor: [time, features_d] matrix of variances
         """
-        res = (self.V_h[time] * self.schedule.beta[time, None].log() + (1. - self.V_h[time]) * self.schedule.rev_beta[time, None].log()).exp()
+        res = self.V_h[time].exp()
         
         if isinstance(time, int):
             res.squeeze_()
