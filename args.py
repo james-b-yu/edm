@@ -17,22 +17,22 @@ Created by MLMI students David Gailey, Katherine Jackson, Stella Tsiapali and Ja
 )
 
 def _validate_args(args: argparse.Namespace):
-    if args.pipeline == "valid" and args.checkpoint is None:
-        raise argparse.ArgumentTypeError("--checkpoint must be set if --pipeline=='valid'")
+    if args.pipeline != "train" and args.checkpoint is None:
+        raise argparse.ArgumentTypeError("--checkpoint must be set if not training")
 
+parser.add_argument("--seed", default=42, type=int, help="set the random seed")
 parser.add_argument("--no-wandb", default=True, action="store_false", dest="use_wandb", help="specify if you do not want to use wandb (if not specified, we use wandb)")
 parser.add_argument("--wandb-project", default="MLMI4 EDM", type=str, help="wandb project name")
 parser.add_argument("--run-id", default=None, type=str, help="use specific wandb run id (e.g. when resuming)")
 
-parser.add_argument("--dataset", default="qm9", help="which dataset to train on, e.g. 'qm9', 'qm9_no_h'")
+parser.add_argument("--dataset", default="qm9", choices=["qm9", "qm9_no_h"], help="which dataset to train on")
 parser.add_argument("--noise-schedule", default="polynomial", type=str, help="which noising schedule to use", choices=["cosine", "polynomial"])
-parser.add_argument("--use-resid", default=False, action="store_true", help="specify egnn learns residual of residual")
 parser.add_argument("--tanh-range", default=15., type=float, help="if using tanh, what factor we should scale by after applying tanh")
 parser.add_argument("--num-steps", default=1000, type=int, help="number of diffusion steps")
 parser.add_argument("--batch-size", default=64, type=int, help="batch size")
 parser.add_argument("--lr", default=1e-5, type=float, help="learning rate")
 parser.add_argument("--no-clip_grad", default=True, action="store_false", dest="clip_grad", help="if specified, do not clip gradients (if not specified, we clip gradients)")
-parser.add_argument("--max_grad_norm", default=8., type=float, help="maximum gradient norm to tolerate")
+parser.add_argument("--max-grad-norm", default=8., type=float, help="maximum gradient norm to tolerate")
 parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu", type=str, help="torch device to use")
 
 parser.add_argument("--hidden-d", default=256, type=int, help="EGNN hidden dimension")
@@ -43,8 +43,12 @@ parser.add_argument("--out-dir", default="./checkpoints", type=str, help="output
 
 parser.add_argument("--extension", default="vanilla", type=str, help="extension to use", choices=["vanilla", "variance"])
 parser.add_argument("--use-non-masked", default=False, action="store_true", help="whether to use our non-masked architecture")
-parser.add_argument("--pipeline", default="train", type=str, help="pipeline", choices=["train", "valid", "test", "demo"])
-parser.add_argument("--checkpoint", default=None, type=str, help="if specified, load checkpoint located in this folder")
+parser.add_argument("--pipeline", default="train", type=str, help="pipeline", choices=["train", "valid", "test", "sample"])
+parser.add_argument("--checkpoint", default=None, type=str, help="if specified, load checkpoint for training located in this folder")
+
+parser.add_argument("--reruns", default=3, type=int, help="how many times to go through the valid/test datasets when estimating metrics for valid/test")
+parser.add_argument("--num-samples", default=100, type=int, help="how many sample to produce when estimating molecule stability metrics for valid/test")
+
 parser.add_argument("--no-restore-optim-state", default=True, action="store_false", dest="restore_optim_state", help="if specified, do not restore optim state from checkpoint (if not specified, then restores from optim.pth)")
 parser.add_argument("--no-restore-scheduler-state", default=True, action="store_false", dest="restore_scheduler_state", help="if specified, do not restore scheduler state from checkpoint (if not specified, then restores from scheduler.pth)")
 
