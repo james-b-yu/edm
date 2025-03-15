@@ -7,6 +7,7 @@ from wandb.wandb_run import Run
 
 from .demo import do_demo
 from training_loop import train_model
+from sampler import sample
 
 def run(args: Namespace, dataloaders: dict[str, DataLoader], wandb_run: None|Run):
     if args.pipeline == "train":
@@ -14,6 +15,6 @@ def run(args: Namespace, dataloaders: dict[str, DataLoader], wandb_run: None|Run
     elif args.pipeline == "valid":
         raise NotImplementedError
     elif args.pipeline == "sample":
-        raise NotImplementedError
+        sample(args,dataloaders["test"])
     elif args.pipeline == "demo":
         do_demo(args, dataloaders["valid"])

@@ -43,7 +43,7 @@ parser.add_argument("--out-dir", default="./checkpoints", type=str, help="output
 
 parser.add_argument("--extension", default="vanilla", type=str, help="extension to use", choices=["vanilla", "variance"])
 parser.add_argument("--use-non-masked", default=False, action="store_true", help="whether to use our non-masked architecture")
-parser.add_argument("--pipeline", default="train", type=str, help="pipeline", choices=["train", "valid", "test", "demo"])
+parser.add_argument("--pipeline", default="train", type=str, help="pipeline", choices=["train", "valid", "test", "demo","sample"])
 parser.add_argument("--checkpoint", default=None, type=str, help="if specified, load checkpoint located in this folder")
 parser.add_argument("--no-restore-optim-state", default=True, action="store_false", dest="restore_optim_state", help="if specified, do not restore optim state from checkpoint (if not specified, then restores from optim.pth)")
 parser.add_argument("--no-restore-scheduler-state", default=True, action="store_false", dest="restore_scheduler_state", help="if specified, do not restore scheduler state from checkpoint (if not specified, then restores from scheduler.pth)")

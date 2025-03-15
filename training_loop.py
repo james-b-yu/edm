@@ -14,7 +14,7 @@ from utils.diffusion import cosine_noise_schedule,polynomial_schedule
 
 # from model import EGNN, EGNNConfig
 from data import QM9Dataset, EDMDataloaderItem
-from noise_schedule import default_noise_schedule
+# from noise_schedule import default_noise_schedule
 from utility import collate_fn, gradient_clipping, random_rotation
 from losses import compute_loss_and_nll, compute_loss
 
@@ -67,7 +67,6 @@ def train_model(args,dataloader,log_file="logs/alt_3_training_log.csv",checkpoin
         with open(log_file, "w") as f:
             f.write("Epoch, Loss, Time(s)\n")
 
-    
 
     for epoch in range(args.start_epoch, args.end_epoch):
 
@@ -162,7 +161,6 @@ def train_model(args,dataloader,log_file="logs/alt_3_training_log.csv",checkpoin
 
            
 # TODO: Implement the `validate_model` function
-# TODO: Implement data augmentation (e.g., random rotation)
 # TODO: Make outputs consistent with args.py
 
     

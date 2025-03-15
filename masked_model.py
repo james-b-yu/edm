@@ -84,9 +84,22 @@ class MaskedEGNN(nn.Module):
         ])
     
     def forward(self, z_coord: torch.Tensor, z_feat: torch.Tensor, time_frac: float|torch.Tensor, node_mask: torch.Tensor, edge_mask: torch.Tensor):
+        # z_coord=z_coord[0]
+
+        # z_coord.to(self.config.device)
+        # z_feat.to(self.config.device)
+        
+        print("Z-cord shape: ")
+        print( z_coord.shape)
+
+        # print("Device: ")
+        # print(self.config.device)
+
+
+        
         batch_size, max_num_atoms, _ = z_coord.shape
         contig_size = batch_size * max_num_atoms
-        _, _, dim_feat = z_feat.shape
+        # _, _, dim_feat = z_feat.shape
         # flatten data so that atoms are continguous
         node_mask = node_mask.flatten()[:, None]
         edge_mask = edge_mask.flatten()[:, None]
@@ -97,11 +110,21 @@ class MaskedEGNN(nn.Module):
         edge_idx = get_batch_edge_idx(max_num_atoms, batch_size, self.config.device)
         # create time tensor by repeating time across all atoms in each molecule
         if isinstance(time_frac, float):  # same time for every molecule
-            time_frac = torch.full_like(z_feat[:, 0:1], fill_value=time_frac)
+            print("here 1")
+            time_frac = torch.full_like(z_feat[:, 0:1], fill_value=time_frac).to(z_feat.device)
         else:  # different time for each molecule
+            print("here 2")
             assert isinstance(time_frac, torch.Tensor) and time_frac.shape == (batch_size, )
-            time_frac = time_frac[:, None].repeat(1, max_num_atoms).flatten()[:, None]
+
+            # MARK CHECK THIS
+            time_frac = time_frac[:, None].repeat(1, max_num_atoms).flatten()[:, None].to(z_feat.device)
         # finally, concat together features and time fraction. XXX: if we want to do conditional generation, then we add the context here
+        print("z_feat device: ")
+        print(z_feat.device)
+
+        print("time_frac device: ")
+        print(time_frac.device)
+        
         z_feat = torch.cat([z_feat, time_frac], dim=-1)
         
         # project features into high-dimensional latent space
