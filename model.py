@@ -1,4 +1,5 @@
 from typing import Any
+from warnings import warn
 import torch
 from torch import nn
 from data import EDMDataloaderItem
@@ -53,7 +54,7 @@ class EGCL(nn.Module):
         Args:
             coords (torch.Tensor): [N, 3]
             features (torch.Tensor): [N, features_d]
-            edges (torch.Tensor): [NN, 2] (torch.int64)
+            edges (torch.Tensor): [NN, 2] (torch.long)
             reduce (torch.Tensor): [N, NN] (tensor of 1.0's and 0.0's that is a float)
             distance (torch.Tensor): [NN, node_attr_d] for distances
         """
@@ -110,6 +111,9 @@ class EGNN(nn.Module):
 
         coords_out = coords
         
+        if isinstance(time_frac, int):
+            warn(f"time_frac should be a floating-point number between 0.0 and 1.0")
+            time_frac = float(time_frac)
         if isinstance(time_frac, float):
             time_frac = time_frac * torch.ones(size=(coords.shape[0], 1), dtype=coords.dtype, layout=coords.layout, device=coords.device)            
         assert isinstance(time_frac, torch.Tensor)        
