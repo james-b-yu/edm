@@ -130,17 +130,17 @@ class Sampler():
         Draw samples from the generative model, keep the intermediate states for visualization purposes.
         """
 
-        print("Node Mask: ")
-        print(node_mask.size())
+        # print("Node Mask: ")
+        # print(node_mask.size())
 
-        print("Edge Mask: ")
-        print(edge_mask.size())
+        # print("Edge Mask: ")
+        # print(edge_mask.size())
 
 
         z = self.sample_combined_position_feature_noise(n_samples, n_nodes, node_mask)
 
-        print("Z Size: ")
-        print(z.size())
+        # print("Z Size: ")
+        # print(z.size())
 
         # diffusion_utils.assert_mean_zero_with_mask(z[:, :, :self.n_dims], node_mask)
 
@@ -149,8 +149,8 @@ class Sampler():
         else:
             assert keep_frames <= self.T
 
-        print("Self T: ")
-        print(self.T)
+        # print("Self T: ")
+        # print(self.T)
         
         chain = torch.zeros((keep_frames,) + z.size(), device=z.device)
 
@@ -161,8 +161,8 @@ class Sampler():
             s_array = s_array / self.T
             t_array = t_array / self.T
 
-            print("Z Size 2: ")
-            print(z.size())
+            # print("Z Size 2: ")
+            # print(z.size())
 
             z = self.sample_p_zs_given_zt(
                 s_array, t_array, z, node_mask, edge_mask, context)
@@ -215,8 +215,8 @@ class Sampler():
 
         sigma2_t_given_s, sigma_t_given_s, alpha_t_given_s = self.sigma_and_alpha_t_given_s(gamma_t, gamma_s, zt)
 
-        print("Z Size 3: ")
-        print(zt.size())
+        # print("Z Size 3: ")
+        # print(zt.size())
 
         sigma_s = self.sigma(gamma_s, target_tensor=zt)
         sigma_t = self.sigma(gamma_t, target_tensor=zt)
@@ -248,18 +248,18 @@ class Sampler():
             coord, one_hot, charge, time_int, node_mask, edge_mask
         )
 
-        print("Pred Eps Coord Size Orig: ")
-        print(pred_eps_coord.size())
+        # print("Pred Eps Coord Size Orig: ")
+        # print(pred_eps_coord.size())
 
-        print("Pred feat Coord Size Orig: ")
-        print(pred_eps_feat.size())
+        # print("Pred feat Coord Size Orig: ")
+        # print(pred_eps_feat.size())
         # print(pred_eps_feat)
 
         pred_eps = torch.cat([pred_eps_coord, pred_eps_feat[:,:,:5], charge], dim=-1).to(pred_eps_coord.device)
         
 
-        print("Pred Eps Coord Size Extended: ")
-        print(pred_eps.size())
+        # print("Pred Eps Coord Size Extended: ")
+        # print(pred_eps.size())
 
         # Ensure all tensors are on the same device
         zt = zt.to(pred_eps_coord.device)
@@ -269,20 +269,20 @@ class Sampler():
         sigma_s = sigma_s.to(pred_eps_coord.device)
         sigma_t_given_s = sigma_t_given_s.to(pred_eps_coord.device)
 
-        print("ZT Size: ")
-        print(zt.size())
+        # print("ZT Size: ")
+        # print(zt.size())
 
-        print("Alpha T Given S Size: ")
-        print(alpha_t_given_s.size())
+        # print("Alpha T Given S Size: ")
+        # print(alpha_t_given_s.size())
 
-        print("Sigma2 T Given S Size: ")
-        print(sigma2_t_given_s.size())
+        # print("Sigma2 T Given S Size: ")
+        # print(sigma2_t_given_s.size())
 
-        print("Sigma T Size: ")
-        print(sigma_t.size())
+        # print("Sigma T Size: ")
+        # print(sigma_t.size())
 
-        print("Pred Eps Coord Size: ")
-        print(pred_eps_coord.size())
+        # print("Pred Eps Coord Size: ")
+        # print(pred_eps_coord.size())
         # print(sigma2_t_given_s.device)
         # print(sigma_t.device)
         # print(pred_eps_coord.device)
@@ -405,14 +405,14 @@ class Sampler():
         # Use the get_eps_and_predicted_eps method to get the predicted epsilon values
         coord, one_hot, charge = z0[:, :, :3], z0[:, :, 3:-1], z0[:, :, -1:]
 
-        print("Coord Size: ")
-        print(coord.size())
+        # print("Coord Size: ")
+        # print(coord.size())
 
-        print("one_hot Size: ")
-        print(one_hot.size())
+        # print("one_hot Size: ")
+        # print(one_hot.size())
 
-        print("charge Size: ")
-        print(charge.size())
+        # print("charge Size: ")
+        # print(charge.size())
 
         # # Ensure time_frac is a torch.Tensor of type torch.float
         # time_frac = t.float().to(zt.device)
@@ -564,7 +564,7 @@ def sample(args,dataloader):
 
 
 
-    n_samples = 1
+    n_samples = 10
     n_nodes = 19
     n_tries = 1
 
@@ -612,3 +612,5 @@ def sample(args,dataloader):
 
 if __name__ == "__main__":
     sample()
+
+# TODO: fix device so ideally runs on CUDA rather than CPU
