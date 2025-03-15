@@ -4,9 +4,10 @@ from typing import Literal
 from warnings import warn
 import torch
 from torch import nn
-from data import EDMDataloaderItem
+from tqdm import tqdm
+from data import EDMDataloaderItem, get_util_tensors
 from model import EDM, EGNN, EDMConfig
-from utils.diffusion import cdf_standard_gaussian, cosine_beta_schedule, polynomial_schedule, gaussian_KL, gaussian_KL_batch, scale_features, unscale_features
+from utils.diffusion import cdf_standard_gaussian, cosine_beta_schedule, polynomial_schedule, gaussian_KL, gaussian_KL_batch
 
 class VarianceEDM(EDM):
     def __init__(self, config: EDMConfig):
@@ -50,13 +51,44 @@ class VarianceEDM(EDM):
         if isinstance(time, int):
             res = res.squeeze()
         return res
+    
+    def std_x(self, time: int | torch.Tensor):
+        """get generative model backward standard deviation at time t for coords
+
+        Args:
+            time (int | torch.Tensor): integer or long tensor
+
+        Returns:
+            torch.Tensor: [time] vector of std devs
+        """
+        
+        res = (0.5 * self.V_x[time]).exp()
+        
+        if isinstance(time, int):
+            res = res.squeeze()
+        return res
+    
+    def std_h(self, time: int | torch.Tensor):
+        """get generative model backward standard deviation at time t for features
+
+        Args:
+            time (int | torch.Tensor): integer or long tensor
+
+        Returns:
+            torch.Tensor: [time, features_d] matrix of variances
+        """
+        res = (0.5 * self.V_h[time]).exp()
+        
+        if isinstance(time, int):
+            res = res.squeeze()
+        return res
         
         
     def forward(self):
         raise NotImplementedError("Please use self.egnn.forward")
     
-    def calculate_loss(self, args: Namespace, split: Literal["train", "valid", "test"], data: EDMDataloaderItem, force_t: None|int = None):
-        s_coords, s_one_hot, s_charges = data.coords, *scale_features(data.one_hot, data.charges)
+    def calculate_loss(self, split: Literal["train", "valid", "test"], data: EDMDataloaderItem, force_t: None|int = None):
+        s_coords, s_one_hot, s_charges = self.scale_inputs(data.coords, data.one_hot, data.charges)
         s_features = torch.cat([s_one_hot, s_charges], dim=-1)
         
         # if calculating training loss, treat L0 like L1:T
@@ -65,7 +97,7 @@ class VarianceEDM(EDM):
         else:
             lowest_t = 1
         
-        t_batch_int = torch.randint(low=lowest_t, high=args.num_steps + 1, size=(data.num_atoms.shape[0], ), dtype=torch.long, device=args.device)  # [B]
+        t_batch_int = torch.randint(low=lowest_t, high=self.config.num_steps + 1, size=(data.num_atoms.shape[0], ), dtype=torch.long, device=self.config.device)  # [B]
         if force_t is not None:
             t_batch_int.fill_(force_t)
             
@@ -73,8 +105,8 @@ class VarianceEDM(EDM):
         s_batch_int = t_batch_int - 1
         s_nodes_int = s_batch_int[data.expand_idx] # [N]
         
-        s = s_nodes_int / args.num_steps
-        t = t_nodes_int / args.num_steps
+        s = s_nodes_int / self.config.num_steps
+        t = t_nodes_int / self.config.num_steps
         
         alf_0 = self.schedule.alpha[0]
         sig_0 = self.schedule.sigma[0]
@@ -169,8 +201,8 @@ class VarianceEDM(EDM):
             # for integer one_hot and charges, scale back to integer scaling
             z0_one_hot = z0_features[:, :-1]
             z0_charges = z0_features[:, -1]
-            us_z0_one_hot, us_z0_charges = unscale_features(z0_one_hot, z0_charges)
-            us_rev_sig0_one_hot, us_rev_sig0_charges = unscale_features(gamma_0_feats[:-1], gamma_0_feats[-1])  # note that we use our LEARNED variances here! HOWEVER, we should never perform a gradient step wrt. log_ph_charges_given_z0 and log_ph_one_hot_given_z0 since this will encourage our model to learn a variance var0 tending towards 0. instead, we only use this function to calculate the vlb AFTER training
+            _, us_z0_one_hot, us_z0_charges = self.unscale_inputs(0, z0_one_hot, z0_charges)
+            _, us_rev_sig0_one_hot, us_rev_sig0_charges = self.unscale_inputs(0, gamma_0_feats[:-1], gamma_0_feats[-1])  # note that we use our LEARNED variances here! HOWEVER, we should never perform a gradient step wrt. log_ph_charges_given_z0 and log_ph_one_hot_given_z0 since this will encourage our model to learn a variance var0 tending towards 0. instead, we only use this function to calculate the vlb AFTER training
             
             # for integer-value charges, find gaussian integral of radius 1 around the deviation
             us_charge_err_centered = data.charges - us_z0_charges[:, None]
@@ -213,8 +245,8 @@ class VarianceEDM(EDM):
             # for integer one_hot and charges, scale back to integer scaling
             z0_one_hot = z0_features[:, :-1]
             z0_charges = z0_features[:, -1]
-            us_z0_one_hot, us_z0_charges = unscale_features(z0_one_hot, z0_charges)
-            us_sig0_one_hot, us_sig0_charges = unscale_features(sig_0, sig_0)
+            _, us_z0_one_hot, us_z0_charges = self.unscale_inputs(0, z0_one_hot, z0_charges)
+            _, us_sig0_one_hot, us_sig0_charges = self.unscale_inputs(0, sig_0, sig_0)
             
             # for integer-value charges, find gaussian integral of radius 1 around the deviation
             us_charge_err_centered = data.charges - us_z0_charges[:, None]
@@ -256,3 +288,55 @@ class VarianceEDM(EDM):
             vlb_est = -data.size_log_probs + vlb_zero + self.config.num_steps * kl_t_greater_than_zero
             
             return vlb_est.mean(), avr_sq_dist
+        
+    @torch.no_grad()
+    def sample(self, num_atoms: torch.Tensor):
+        assert num_atoms.dtype == torch.long and num_atoms.dim() == 1, "You must provide a tensor of length [B] and type long, where B is the number of molecules to create"
+        
+        B = int(num_atoms.size(0))  # number of molecules to mkae 
+        N = int(num_atoms.sum())   # total number of atoms
+        
+        edges, reduce, demean, expand_idx, batch_mean, batch_sum = get_util_tensors(num_atoms)
+        
+        coords = demean @ torch.randn(size=(N, 3), dtype=torch.float32, device=self.config.device)
+        feats = torch.randn(size=(N, self.config.num_atom_types + 1), dtype=torch.float32, device=self.config.device)
+        
+        T = self.config.num_steps
+        for t_int in tqdm(range(T, 0, -1), leave=False):
+            # sample z(t-1) | z(t)
+            t_frac = t_int/T
+            alf_t = self.schedule.alpha[t_int]
+            alf_s = self.schedule.alpha_L[t_int]
+            bet_t = self.schedule.beta[t_int]
+            sig_t = self.schedule.sigma[t_int]
+            
+            new_eps_coords = demean @ torch.randn_like(coords)
+            new_eps_feats = torch.randn_like(feats)
+            pred_eps_coords, pred_eps_feats = self.egnn(n_nodes=num_atoms, coords=coords, features=feats, edges=edges, reduce=reduce, demean=demean, time_frac=t_frac)
+            
+            std_coords = self.std_x(t_int)
+            std_feats = self.std_h(t_int)
+            
+            coords = (alf_s / alf_t) * coords - (alf_s / alf_t) * (bet_t / sig_t) * pred_eps_coords + std_coords * new_eps_coords
+            feats  = (alf_s / alf_t) * feats  - (alf_s / alf_t) * (bet_t / sig_t) * pred_eps_feats  + std_feats  * new_eps_feats
+            
+        # now z(0) = (coords, feats) so we need to sample x | z(0)
+        alf_0 = self.schedule.alpha[0]
+        sig_0 = self.schedule.sigma[0]
+        
+        new_eps_coords = demean @ torch.randn_like(coords)
+        new_eps_feats = torch.randn_like(feats)
+        pred_eps_coords, pred_eps_feats = self.egnn(n_nodes=num_atoms, coords=coords, features=feats, edges=edges, reduce=reduce, demean=demean, time_frac=0.)
+        
+        std_coords = self.std_x(0)
+        std_feats = self.std_h(0)
+        
+        # sample final variables
+        coords = coords / alf_0 - (sig_0 / alf_0) * pred_eps_coords + std_coords * new_eps_coords
+        feats  = feats  / alf_0 - (sig_0 / alf_0) * pred_eps_feats  + std_feats  * new_eps_feats
+        
+        one_hot, charges = feats[:, :-1], feats[:, -1]
+        coords, one_hot, charges = self.unscale_inputs(coords, one_hot, charges)
+        
+        # TODO: round feats!
+        return coords, one_hot, charges

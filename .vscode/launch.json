@@ -5,6 +5,20 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "DEBUG SAMPLES",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/run.py",
+            "console": "integratedTerminal",
+            "args": [
+                "--checkpoint=./checkpoints/variance_finetune_with_h",
+                "--pipeline=sample",
+                "--batch-size=8",
+                "--num-samples=15",
+                "--no-wandb",
+            ]
+        },
+        {
             "name": "DEBUG CHECKPOINT",
             "type": "debugpy",
             "request": "launch",

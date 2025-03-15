@@ -3,12 +3,12 @@ import numpy as np
 
 def collate_fn(batch):
 
-    n_nodes = torch.tensor([item.n_nodes for item in batch], dtype=torch.int64)
+    n_nodes = torch.tensor([item.n_nodes for item in batch], dtype=torch.long)
     coords = torch.cat([item.coords for item in batch])
     features = torch.cat([item.features for item in batch])
 
     # Compute node offset for batch processing
-    node_offset = torch.cumsum(torch.cat([torch.tensor([0], dtype=torch.int64), n_nodes[:-1]]), dim=0)
+    node_offset = torch.cumsum(torch.cat([torch.tensor([0], dtype=torch.long), n_nodes[:-1]]), dim=0)
 
     # Compute edges dynamically
     edges_list = []

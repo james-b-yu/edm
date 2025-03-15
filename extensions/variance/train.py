@@ -10,7 +10,7 @@ from wandb.wandb_run import Run
 from data import EDMDataset, EDMDataloaderItem
 from model import EGNNConfig
 from model_config import get_config_from_args
-from utils.diffusion import Queue, gradient_clipping, scale_features
+from utils.diffusion import Queue, gradient_clipping
 
 from .variance_model import VarianceEDM
 
@@ -27,7 +27,7 @@ def one_train_epoch(args: Namespace, epoch: int, dl: DataLoader, model: Variance
 
         optim.zero_grad()
     
-        train_loss = model.calculate_loss(args=args, split="train", data=data)
+        train_loss = model.calculate_loss(split="train", data=data)
         assert isinstance(train_loss, torch.Tensor)
         train_loss.backward()
         
@@ -64,7 +64,7 @@ def one_valid_epoch(args: Namespace, split: Literal["valid", "test"], epoch: int
         data: EDMDataloaderItem
         data.to_(args.device)
         
-        vlb, dist = model.calculate_loss(args=args, split=split, data=data)
+        vlb, dist = model.calculate_loss(split=split, data=data)
         
         pbar.set_description(f"({split}) Vlb: {vlb:.2f} Dist: {dist:.2f}")
         
@@ -105,7 +105,26 @@ def enter_train_loop(model: VarianceEDM, model_ema: VarianceEDM, optim: torch.op
                 "lr": optim.param_groups[0]["lr"],
                 "epoch": epoch
             })
-            
+
+def enter_valid_loop(model: VarianceEDM, split: Literal["valid", "test"], args: Namespace, dl: DataLoader):
+    """go through valid or test set many times and return mean and std of vlb, according to args.reruns
+
+    Args:
+        model (VarianceEDM): the model
+        split ("valid" | "test"): the name of the split (for printing purposes only)
+        args (Namespace): arguments
+        dl (DataLoader): dataloader
+        
+    Returns tuple[float, float]: mean and std of vlbs across runs
+    """
+    vlbs = []
+    for _ in tqdm(range(args.reruns)):
+        vlb, _ = one_valid_epoch(args, split, 0, dl, model)
+        vlbs.append(vlb)
+    vlbs = torch.tensor(vlbs, dtype=torch.float32, device="cpu")
+    return float(vlbs.mean()), float(vlbs.std())
+  
+
 def _update_ema(beta: float, model: VarianceEDM, model_ema: VarianceEDM):
     """update ema with new model params via formula model_ema = beta * model_ema + (1 - beta) * model
 

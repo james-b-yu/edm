@@ -39,8 +39,9 @@ def clip_noise_schedule(alphas2, clip_value=0.001):
 @dataclass
 class ScheduleInfo:
     alpha: torch.Tensor
+    alpha_L: torch.Tensor  # alpha evaluated at t-1 -- first value is padded = 1
     alpha_squared: torch.Tensor
-    alpha_squared_L: torch.Tensor  # alpha_squared evaluated at t-1 -- first value is padded at 1
+    alpha_squared_L: torch.Tensor  # alpha_squared evaluated at t-1 -- first value is padded = 1
     sigma: torch.Tensor
     sigma_squared: torch.Tensor
     sigma_L: torch.Tensor
@@ -66,6 +67,7 @@ def _get_schedule_from_alpha_squared_np(alpha_squared_np: np.ndarray, device: to
     rev_beta_np[0] = 0.5 * beta_np[0]  # fill dummy value for zeroth term but still allow for variation
     
     alpha = torch.from_numpy((alpha_squared_np ** 0.5).astype(np.float32)).to(device=device)
+    alpha_L = torch.from_numpy((alpha_squared_np_L ** 0.5).astype(np.float32)).to(device=device)
     alpha_squared = torch.from_numpy(alpha_squared_np.astype(np.float32)).to(device=device)
     alpha_squared_L = torch.from_numpy(alpha_squared_np_L.astype(np.float32)).to(device=device)
     sigma = torch.from_numpy((sigma_squared_np ** 0.5).astype(np.float32)).to(device=device)
@@ -77,6 +79,7 @@ def _get_schedule_from_alpha_squared_np(alpha_squared_np: np.ndarray, device: to
     
     return ScheduleInfo(
         alpha=alpha,
+        alpha_L=alpha_L,
         alpha_squared=alpha_squared,
         alpha_squared_L=alpha_squared_L,
         sigma=sigma,
@@ -124,27 +127,6 @@ def cosine_beta_schedule(timesteps, device: torch.device|str, s=0.008):
     alpha_bar = np.cumprod(alpha_squared_transition, axis=0)
     
     return _get_schedule_from_alpha_squared_np(alpha_bar, device)
-    
-def scale_features(one_hot: torch.Tensor, charges: torch.Tensor):
-    """use the scaling implmeneted by the paper
-
-    Args:
-        one_hot (torch.Tensor):
-        charges (torch.Tensor):
-    """
-    
-    return 0.25 * one_hot, 0.1 * charges
-
-def unscale_features(one_hot: torch.Tensor, charges: torch.Tensor):
-    """undo the scaling implemented by the paper
-
-    Args:
-        one_hot (torch.Tensor):
-        charges (torch.Tensor):
-    """
-    
-    return 4.0 * one_hot, 10.0 * charges
-
 
 #Gradient clipping
 class Queue():
