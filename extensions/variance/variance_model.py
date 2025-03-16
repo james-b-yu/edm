@@ -290,9 +290,9 @@ class VarianceEDM(EDM):
             
             
             # vanilla stuff
-            van_kl_t_greater_than_zero = get_van_kl_t_greater_than_zero()
-            van_vlb_zero = -get_van_vlb_zeroth_term()
-            van_vlb_est = -data.size_log_probs + van_vlb_zero + self.config.num_steps * van_kl_t_greater_than_zero
+            # van_kl_t_greater_than_zero = get_van_kl_t_greater_than_zero()
+            # van_vlb_zero = -get_van_vlb_zeroth_term()
+            # van_vlb_est = -data.size_log_probs + van_vlb_zero + self.config.num_steps * van_kl_t_greater_than_zero
             return vlb_est.mean(), avr_sq_dist
         
     @torch.no_grad()
