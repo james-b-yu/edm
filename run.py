@@ -11,7 +11,7 @@ sys.path.append(".")
 from os import path
 import pickle
 import wandb
-from eval import compute_nll, load_model, load_test_data
+# from eval import compute_nll, load_model, load_test_data
 
 from args import args, parser
 from extensions import vanilla, variance

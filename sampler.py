@@ -8,6 +8,7 @@ from masked_model import MaskedEDM
 # from masked_data import get_masked_qm9_dataloader
 from model_config import get_config_from_args
 import os
+from eval import compute_molecule_stability
 
 
 
@@ -564,7 +565,7 @@ def sample(args,dataloader):
 
 
 
-    n_samples = 10
+    n_samples = 1
     n_nodes = 19
     n_tries = 1
 
@@ -588,15 +589,41 @@ def sample(args,dataloader):
         one_hot = chain[-1:, :, 3:-1]
         one_hot = torch.argmax(one_hot, dim=2)
 
+        # print("One Hot Initial: ")
+        # print(one_hot.size())
+
         atom_type = one_hot.squeeze(0).cpu().detach().numpy()
+
+        # print("Atom Type: ")
+        # print(atom_type.size())
+
         x_squeeze = x.squeeze(0).cpu().detach().numpy()
-        mol_stable = check_stability(x_squeeze, atom_type, dataloader.dataset)[0]
+
+        # Authors function
+        # mol_stable = check_stability(x_squeeze, atom_type, dataloader.dataset)[0]
 
         # Prepare entire chain.
         x = chain[:, :, 0:3]
         one_hot = chain[:, :, 3:-1]
-        one_hot = F.one_hot(torch.argmax(one_hot, dim=2), num_classes=len(dataloader.dataset['atom_decoder']))
+        num_classes=5
+        # one_hot = F.one_hot(torch.argmax(one_hot, dim=2), num_classes=len(dataloader.dataset['atom_decoder']))
+        one_hot = F.one_hot(torch.argmax(one_hot, dim=2), num_classes=5)
+
         charges = torch.round(chain[:, :, -1:]).long()
+
+        n_nodes_tensor = torch.tensor(n_nodes).repeat(n_samples).to(device)
+        print("n_nodes_tensor: ")
+        print(n_nodes_tensor.size())
+
+        print("One Hot: ")
+        print(one_hot[-1].size())
+
+        print("Charges: ")
+        print(charges[-1].size())
+
+        mol_stable = compute_molecule_stability(one_hot[-1], charges[-1], (n_nodes_tensor))
+        print("Molecule Stable: ")
+        print(mol_stable)
 
         if mol_stable:
             print('Found stable molecule to visualize :)')
