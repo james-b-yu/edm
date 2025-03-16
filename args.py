@@ -42,7 +42,7 @@ parser.add_argument("--run-name", default="edm_run", type=str, help="the name of
 parser.add_argument("--out-dir", default="./checkpoints", type=str, help="output will be contained in the folder <out_dir>/<run_name>/")
 
 parser.add_argument("--extension", default="vanilla", type=str, help="extension to use", choices=["vanilla", "variance"])
-parser.add_argument("--use-non-masked", default=False, action="store_true", help="whether to use our non-masked architecture")
+parser.add_argument("--use-masked", default=False, action="store_true", help="whether to use the masked memory layout (a la original repo) -- if not set, i.e. by default, we use our architecture with flattened memory layout")
 parser.add_argument("--pipeline", default="train", type=str, help="pipeline", choices=["train", "valid", "test", "sample"])
 parser.add_argument("--checkpoint", default=None, type=str, help="if specified, load checkpoint for training located in this folder")
 

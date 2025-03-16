@@ -51,6 +51,6 @@ if __name__ == "__main__":
     if args.extension == "vanilla":
         vanilla.run(args, dataloaders if args.use_non_masked else masked_dataloders , wandb_run)
     if args.extension == "variance":
-        if not args.use_non_masked:
-            warnings.warn("The variance extension is implemented only with our implementation for the non-masked (flattened) data layout. --use-non-masked will be automatically enabled")
+        if args.use_masked:
+            warnings.warn("The variance extension is implemented only with our implementation for the (flattened) data layout. --use-masked will be disabled")
         variance.run(args, dataloaders, wandb_run)
