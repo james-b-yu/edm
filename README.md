@@ -15,10 +15,10 @@ python run.py --pipeline=test --seed=42 --reruns=5 --checkpoint=./pretrained/<ex
 `<extension-name>` is any one of `'vanilla-with-h'`, `'vanilla-without-h'`, `'variance-with-h'` or `'variance-without-h'`,
 
 The following table summarises the result of running this command:
-|**Estimate of NLL**|`vanilla-with-h`|`vanilla-without-h`|`variance-with-h`|`variance-without-h`|
-|---|----|---|---|--|
-|`model.pth`|||`-122.91 (0.70)`
-|`model_ema.pth`|||`-123.74 (1.41)`
+|**Estimate of NLL**|No extensions (vanilla)|Learning variance|
+|---|----|---|
+|With hydrogens|`-111.44 (0.98)`|`-121.64 (0.69)`|
+|Without hydrogens|`-22.96 (0.71)`|TODO|
 
 The extension and model hyperparameters are automatically activated based on the contents of `args.pkl` in the checkpoint folder.
 

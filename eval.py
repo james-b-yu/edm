@@ -4,8 +4,8 @@
 
 import torch
 import torch.nn.functional as F
-from model import EGCL, EGCLConfig
-from model import EGNN, EGNNConfig
+from models.base import EGCL, EGCLConfig
+from models.base import EGNN, EGNNConfig
 import pickle
 from data import get_qm9_dataloader
 from argparse import Namespace

@@ -106,19 +106,6 @@ class EDMDataloaderItem(EDMBaseDataloaderItem):
         # force long type on these
         self.edges = self.edges.to(dtype=torch.long, device=self.coords.device)
         self.expand_idx = self.expand_idx.to(dtype=torch.long, device=self.coords.device)
-        
-@dataclass
-class EDMMaskedDataloaderItem(EDMBaseDataloaderItem):
-    node_mask: torch.Tensor
-    edge_mask: torch.Tensor
-    
-    def to_(self, *args, **kwargs):
-        """calls `torch.Tensor.to` on all tensors, assigning the results
-        """
-        super().to_(*args, **kwargs)
-    
-        self.node_mask = self.node_mask.to(*args, **kwargs)
-        self.edge_mask = self.edge_mask.to(*args, **kwargs)
 
 
 QM9Attributes = Literal["index", "A", "B", "C", "mu", "alpha", "homo", "lumo", "gap", "r2", "zpve", "U0", "U", "H", "G", "Cv", "omega1", "zpve_thermo", "U0_thermo", "U_thermo", "H_thermo", "G_thermo", "Cv_thermo"]
@@ -236,47 +223,64 @@ def _collate_fn(data: list[EDMDatasetItem]):
 
         return EDMDataloaderItem(num_atoms=n_nodes, coords=coords, one_hot=one_hot, charges=charges, edges=edges, reduce=reduce, batch_mean=batch_mean, batch_sum=batch_sum, demean=demean, expand_idx=expand_idx, size_log_probs=size_log_probs)
 
-def _masked_collate_fn(data: list[EDMDatasetItem]):
-    n_nodes = torch.tensor([d.n_nodes for d in data], dtype=torch.long)
-    size_log_probs = torch.tensor([d.size_log_prob for d in data], dtype=torch.float32)
-    max_n_nodes = int(n_nodes.max())
-    coords  = torch.nn.utils.rnn.pad_sequence([d.coords for d in data], batch_first=True, padding_value=0)
-    one_hot = torch.nn.utils.rnn.pad_sequence([d.one_hot for d in data], batch_first=True, padding_value=0)
-    charges = torch.nn.utils.rnn.pad_sequence([d.charges for d in data], batch_first=True, padding_value=0)
-    
-    node_mask = charges > 0
-    edge_mask = node_mask[:, None, :] * node_mask[:, :, None]
-    edge_mask *= ~torch.eye(max_n_nodes, dtype=torch.bool)[None]
-    edge_mask = edge_mask.flatten(start_dim=1)
-    
-    # add extra dimension to things
-    node_mask = node_mask[:, :, None]
-    charges = charges[:, :, None]
-    
-    # set convert to floating point tensors
-    edge_mask = edge_mask.to(dtype=torch.float32)
-    node_mask = node_mask.to(dtype=torch.float32)
-    
-    # finally demean coordinates
-    coords = demean_using_mask(coords, node_mask)
-    batch_size = coords.shape[0]
-    
-    return EDMMaskedDataloaderItem(
-        num_atoms=n_nodes,
-        coords=coords,
-        one_hot=one_hot,
-        charges=charges,
-        node_mask=node_mask,
-        edge_mask=edge_mask,
-        size_log_probs=size_log_probs
-    )
-
 def get_qm9_dataloader(use_h: bool, split: Literal["train", "valid", "test"], batch_size: int, prefetch_factor: int|None=None, num_workers = 0, pin_memory=True, shuffle:bool|None=True):
     if shuffle is None:
         shuffle = split == "train"
-    return td.DataLoader(dataset=QM9Dataset(use_h=use_h, split=split), batch_size=batch_size, collate_fn=_collate_fn, pin_memory=pin_memory, prefetch_factor=prefetch_factor, num_workers=num_workers, shuffle=shuffle)
+    res: td.DataLoader[QM9Dataset] = td.DataLoader(dataset=QM9Dataset(use_h=use_h, split=split), batch_size=batch_size, collate_fn=_collate_fn, pin_memory=pin_memory, prefetch_factor=prefetch_factor, num_workers=num_workers, shuffle=shuffle)
+    return res
 
-def get_masked_qm9_dataloader(use_h: bool, split: Literal["train", "valid", "test"], batch_size: int, prefetch_factor: int|None=None, num_workers=0, pin_memory=True, shuffle:bool|None=None):
-    if shuffle is None:
-        shuffle = split == "train"
-    return td.DataLoader(dataset=QM9Dataset(use_h=use_h, split=split), batch_size=batch_size, collate_fn=_masked_collate_fn, pin_memory=pin_memory, prefetch_factor=prefetch_factor, num_workers=num_workers, shuffle=shuffle)
+if False:
+    """we no longer want to use the masked format. so explicitly do not export it here
+    """
+    @dataclass
+    class EDMMaskedDataloaderItem(EDMBaseDataloaderItem):
+        node_mask: torch.Tensor
+        edge_mask: torch.Tensor
+        
+        def to_(self, *args, **kwargs):
+            """calls `torch.Tensor.to` on all tensors, assigning the results
+            """
+            super().to_(*args, **kwargs)
+        
+            self.node_mask = self.node_mask.to(*args, **kwargs)
+            self.edge_mask = self.edge_mask.to(*args, **kwargs)
+    
+    def _masked_collate_fn(data: list[EDMDatasetItem]):
+        n_nodes = torch.tensor([d.n_nodes for d in data], dtype=torch.long)
+        size_log_probs = torch.tensor([d.size_log_prob for d in data], dtype=torch.float32)
+        max_n_nodes = int(n_nodes.max())
+        coords  = torch.nn.utils.rnn.pad_sequence([d.coords for d in data], batch_first=True, padding_value=0)
+        one_hot = torch.nn.utils.rnn.pad_sequence([d.one_hot for d in data], batch_first=True, padding_value=0)
+        charges = torch.nn.utils.rnn.pad_sequence([d.charges for d in data], batch_first=True, padding_value=0)
+        
+        node_mask = charges > 0
+        edge_mask = node_mask[:, None, :] * node_mask[:, :, None]
+        edge_mask *= ~torch.eye(max_n_nodes, dtype=torch.bool)[None]
+        edge_mask = edge_mask.flatten(start_dim=1)
+        
+        # add extra dimension to things
+        node_mask = node_mask[:, :, None]
+        charges = charges[:, :, None]
+        
+        # set convert to floating point tensors
+        edge_mask = edge_mask.to(dtype=torch.float32)
+        node_mask = node_mask.to(dtype=torch.float32)
+        
+        # finally demean coordinates
+        coords = demean_using_mask(coords, node_mask)
+        batch_size = coords.shape[0]
+        
+        return EDMMaskedDataloaderItem(
+            num_atoms=n_nodes,
+            coords=coords,
+            one_hot=one_hot,
+            charges=charges,
+            node_mask=node_mask,
+            edge_mask=edge_mask,
+            size_log_probs=size_log_probs
+        )
+    
+    def get_masked_qm9_dataloader(use_h: bool, split: Literal["train", "valid", "test"], batch_size: int, prefetch_factor: int|None=None, num_workers=0, pin_memory=True, shuffle:bool|None=None):
+        if shuffle is None:
+            shuffle = split == "train"
+        return td.DataLoader(dataset=QM9Dataset(use_h=use_h, split=split), batch_size=batch_size, collate_fn=_masked_collate_fn, pin_memory=pin_memory, prefetch_factor=prefetch_factor, num_workers=num_workers, shuffle=shuffle)

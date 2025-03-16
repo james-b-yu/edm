@@ -1,5 +1,5 @@
 import torch
-from model import EGNN,EGNNConfig  # Model
+from models.base import EGNN,EGNNConfig  # Model
 from data import EDMDataloaderItem  # For handling molecule data
 from utils.diffusion import cosine_noise_schedule, default_noise_schedule # For creating noise schedules
 import torch.nn.functional as F
