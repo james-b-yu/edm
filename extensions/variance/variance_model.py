@@ -102,10 +102,7 @@ class VarianceEDM(EDM):
             t_batch_int.fill_(force_t)
             
         t_nodes_int = t_batch_int[data.expand_idx] # [N]
-        s_batch_int = t_batch_int - 1
-        s_nodes_int = s_batch_int[data.expand_idx] # [N]
         
-        s = s_nodes_int / self.config.num_steps
         t = t_nodes_int / self.config.num_steps
         
         alf_0 = self.schedule.alpha[0]
@@ -119,15 +116,16 @@ class VarianceEDM(EDM):
         
         alf_batch = self.schedule.alpha[t_batch_int]
         sig_batch = self.schedule.sigma[t_batch_int]
-        alf_lag_batch = self.schedule.alpha[s_batch_int]
-        sig_lag_batch = self.schedule.sigma[s_batch_int]
+        alf_lag_batch = self.schedule.alpha_L[t_batch_int]
+        sig_lag_batch = self.schedule.sigma_L[t_batch_int]
         
 
         alf_sq_batch = self.schedule.alpha_squared[t_batch_int]
         alf_sq_L_batch = self.schedule.alpha_squared_L[t_batch_int]
         sig_sq_batch = self.schedule.sigma_squared[t_batch_int]
+        sig_sq_L_batch = self.schedule.sigma_squared_L[t_batch_int]
         bet_batch = self.schedule.beta[t_batch_int]
-        bet_rev_batch = self.schedule.beta[t_batch_int]
+        bet_rev_batch = self.schedule.rev_beta[t_batch_int]
         gamma_x_batch = self.gamma_x(t_batch_int)
         gamma_h_batch = self.gamma_h(t_batch_int)
         gamma_h_nodes = self.gamma_h(t_nodes_int)
