@@ -1,5 +1,5 @@
 from argparse import Namespace
-from math import log
+from math import ceil, log
 from typing import Literal
 from warnings import warn
 import torch
@@ -296,7 +296,7 @@ class VarianceEDM(EDM):
             return vlb_est.mean(), avr_sq_dist
         
     @torch.no_grad()
-    def sample_flattened(self, num_atoms: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    def _sample_flattened(self, num_atoms: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         """Given a an array of molecule sizes, return a sampled molecules in flattened format
 
         Args:
@@ -306,6 +306,7 @@ class VarianceEDM(EDM):
             tuple[torch.Tensor, torch.Tensor, torch.Tensor]: coords, one_hot, charges in flattened representation
         """
         assert num_atoms.dtype == torch.long and num_atoms.dim() == 1, "You must provide a tensor of length [B] and type long, where B is the number of molecules to create"
+        assert not self.training, "We don't want to be training here"
         
         B = int(num_atoms.size(0))  # number of molecules to mkae 
         N = int(num_atoms.sum())   # total number of atoms
@@ -316,7 +317,7 @@ class VarianceEDM(EDM):
         feats = torch.randn(size=(N, self.config.num_atom_types + 1), dtype=torch.float32, device=self.config.device)
         
         T = self.config.num_steps
-        for t_int in tqdm(range(T, 0, -1), leave=False):
+        for t_int in tqdm(range(T, 0, -1), leave=False, unit="step"):
             # sample z(t-1) | z(t)
             t_frac = t_int/T
             alf_t = self.schedule.alpha[t_int]
@@ -354,3 +355,37 @@ class VarianceEDM(EDM):
         one_hot, charges = one_hot.round().to(dtype=torch.long), charges.round().to(dtype=torch.long)
         
         return coords, one_hot, charges
+    
+    def sample(self, num_molecules: int, batch_size: int, atom_sizes: torch.Tensor, atom_size_probs: torch.Tensor, to_numpy=True):
+        
+        samples = []
+        pbar = tqdm(leave=False, total=num_molecules, unit="sample")
+        for i in range(ceil(num_molecules / batch_size)):
+            B = min(batch_size, num_molecules - len(samples))
+            num_atoms = atom_sizes[torch.multinomial(atom_size_probs, B, replacement=True)]
+            coords, one_hot, charges = self._sample_flattened(num_atoms)
+            
+            # separate the molecules and append to samples
+            batch_idx = 0
+            flattened_idx = 0
+            while batch_idx < B:
+                size = num_atoms[batch_idx]
+                mol_coords = coords[flattened_idx:flattened_idx + size]
+                mol_one_hot = one_hot[flattened_idx:flattened_idx + size]
+                mol_charges = charges[flattened_idx:flattened_idx + size]
+                if to_numpy:
+                    mol_coords = mol_coords.numpy(force=True)
+                    mol_one_hot = mol_one_hot.numpy(force=True)
+                    mol_charges = mol_charges.numpy(force=True)
+                    
+                samples.append((mol_coords, mol_one_hot, mol_charges))
+                flattened_idx += size
+                batch_idx += 1
+            
+            assert(batch_idx == B and flattened_idx == num_atoms.sum())
+            pbar.n = flattened_idx + 1
+            pbar.refresh()
+        assert(len(samples) == num_molecules)
+        pbar.close()
+        
+        return samples

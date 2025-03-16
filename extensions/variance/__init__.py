@@ -71,30 +71,11 @@ def run(args: Namespace, dataloaders: dict[str, DataLoader], wandb_run: None|Run
         model.eval()
         model_ema.eval()
 
+        num_molecules = args.num_samples
+        batch_size = args.batch_size
         atom_sizes = torch.tensor(list(DATASET_INFO[args.dataset]["molecule_size_histogram"].keys()), dtype=torch.long, device=args.device)
-        atom_probs = torch.tensor(list(DATASET_INFO[args.dataset]["molecule_size_histogram"].values()), dtype=torch.float, device=args.device)
-        num_samples = args.num_samples
-        samples = []
-        for i in range(ceil(num_samples / args.batch_size)):
-            B = min(args.batch_size, num_samples - len(samples))
-            num_atoms = atom_sizes[torch.multinomial(atom_probs, B, replacement=True)]
-            coords, one_hot, charges = model.sample_flattened(num_atoms)
-            
-            # separate the molecules and append to samples
-            batch_idx = 0
-            flattened_idx = 0
-            while batch_idx < B:
-                size = num_atoms[batch_idx]
-                samples.append((coords[flattened_idx:flattened_idx + size],
-                                one_hot[flattened_idx:flattened_idx + size],
-                                charges[flattened_idx:flattened_idx + size]))
-                flattened_idx += size
-                batch_idx += 1
-            
-            assert(batch_idx == B and flattened_idx == num_atoms.sum())
-        
-        assert(len(samples) == num_samples)
-        
-        return samples
+        atom_size_probs = torch.tensor(list(DATASET_INFO[args.dataset]["molecule_size_histogram"].values()), dtype=torch.float, device=args.device)
+        samples = model.sample(num_molecules, batch_size, atom_sizes, atom_size_probs)
+        pass
     else:
         raise NotImplementedError
