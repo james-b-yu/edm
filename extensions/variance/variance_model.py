@@ -228,11 +228,14 @@ class VarianceEDM(EDM):
         def get_van_kl_t_greater_than_zero():
             sq_err_coords = (data.batch_sum @ ((eps_coords - pred_eps_coords) ** 2)).sum(dim=-1)
             sq_err_features = (data.batch_sum @ ((eps_features - pred_eps_features) ** 2)).sum(dim=-1)
-            weight = 0.5 * ((alf_lag_batch / sig_lag_batch) / (alf_batch / sig_batch) - 1)
+            weight = 0.5 * ((alf_sq_L_batch / sig_sq_L_batch) / (alf_sq_batch / sig_sq_batch) - 1)
             error = weight * (sq_err_coords + sq_err_features)
             return error
         
         def get_van_vlb_zeroth_term():
+            # constant coord term
+            const0 = -(data.num_atoms - 1.) * 3 * (0.5 * log(2 * torch.pi) + torch.log(sig_0) - torch.log(alf_0)) # = log Z in the paper
+            
             # for continuous coords, we resample 
             z0_coords = alf_0 * s_coords + sig_0 * eps_coords
             z0_features = alf_0 * s_features + sig_0 * eps_features
@@ -266,7 +269,7 @@ class VarianceEDM(EDM):
             log_one_hot_probabilities = log_ph_one_hot_given_z0_unnormalised - log_one_hot_normalisation_factor
             log_ph_one_hot_given_z0 = data.batch_sum @ (log_one_hot_probabilities * data.one_hot).sum(dim=-1)
             
-            return log_px_given_z0 + log_ph_one_hot_given_z0 + log_ph_charges_given_z0
+            return const0 + log_px_given_z0 + log_ph_one_hot_given_z0 + log_ph_charges_given_z0
         
         if split == "train":
             kl_t_greater_than_zero = get_kl_t_greater_than_zero()
@@ -285,6 +288,11 @@ class VarianceEDM(EDM):
             
             vlb_est = -data.size_log_probs + vlb_zero + self.config.num_steps * kl_t_greater_than_zero
             
+            
+            # vanilla stuff
+            van_kl_t_greater_than_zero = get_van_kl_t_greater_than_zero()
+            van_vlb_zero = -get_van_vlb_zeroth_term()
+            van_vlb_est = -data.size_log_probs + van_vlb_zero + self.config.num_steps * van_kl_t_greater_than_zero
             return vlb_est.mean(), avr_sq_dist
         
     @torch.no_grad()

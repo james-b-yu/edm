@@ -38,8 +38,9 @@
             "args": [
                 "--extension=variance",
                 "--pipeline=valid",
-                "--checkpoint=./checkpoints/variance_with_h",
-                "--no-wandb"
+                "--checkpoint=./checkpoints/variance_vanilla_with_h",
+                "--use-non-masked",
+                "--seed=42"
             ]
         },
         {
