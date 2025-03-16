@@ -143,4 +143,5 @@ class EDM(BaseEDM):
     @torch.no_grad()
     def _sample_flattened(self, num_atoms: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         # num_atoms is a torch tensor of size [B] where B is the number of molecules to generate and num_atoms[m] is the number of atoms in molecule m
+        # TODO: implement this
         raise NotImplementedError

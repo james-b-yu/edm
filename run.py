@@ -115,6 +115,7 @@ if __name__ == "__main__":
         samples = model.sample(num_molecules, batch_size, mol_sizes, mol_size_probs)
         
         # TODO: write these samples to disk as .xyz files
+        # TODO: calculate stability metrics on the generated samples
         pass
     else:
         raise NotImplementedError
