@@ -75,7 +75,11 @@ def run(args: Namespace, dataloaders: dict[str, DataLoader], wandb_run: None|Run
         batch_size = args.batch_size
         atom_sizes = torch.tensor(list(DATASET_INFO[args.dataset]["molecule_size_histogram"].keys()), dtype=torch.long, device=args.device)
         atom_size_probs = torch.tensor(list(DATASET_INFO[args.dataset]["molecule_size_histogram"].values()), dtype=torch.float, device=args.device)
+        print(f"Sampling from 'model.pth'")
         samples = model.sample(num_molecules, batch_size, atom_sizes, atom_size_probs)
+        if ema_loaded:
+            print(f"Sampling from 'model_ema.pth'")
+            samples_ema = model_ema.sample(num_molecules, batch_size, atom_sizes, atom_size_probs)
         pass
     else:
         raise NotImplementedError

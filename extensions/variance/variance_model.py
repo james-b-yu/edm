@@ -359,33 +359,31 @@ class VarianceEDM(EDM):
     def sample(self, num_molecules: int, batch_size: int, atom_sizes: torch.Tensor, atom_size_probs: torch.Tensor, to_numpy=True):
         
         samples = []
-        pbar = tqdm(leave=False, total=num_molecules, unit="sample")
-        for i in range(ceil(num_molecules / batch_size)):
-            B = min(batch_size, num_molecules - len(samples))
-            num_atoms = atom_sizes[torch.multinomial(atom_size_probs, B, replacement=True)]
-            coords, one_hot, charges = self._sample_flattened(num_atoms)
-            
-            # separate the molecules and append to samples
-            batch_idx = 0
-            flattened_idx = 0
-            while batch_idx < B:
-                size = num_atoms[batch_idx]
-                mol_coords = coords[flattened_idx:flattened_idx + size]
-                mol_one_hot = one_hot[flattened_idx:flattened_idx + size]
-                mol_charges = charges[flattened_idx:flattened_idx + size]
-                if to_numpy:
-                    mol_coords = mol_coords.numpy(force=True)
-                    mol_one_hot = mol_one_hot.numpy(force=True)
-                    mol_charges = mol_charges.numpy(force=True)
-                    
-                samples.append((mol_coords, mol_one_hot, mol_charges))
-                flattened_idx += size
-                batch_idx += 1
-            
-            assert(batch_idx == B and flattened_idx == num_atoms.sum())
-            pbar.n = flattened_idx + 1
-            pbar.refresh()
-        assert(len(samples) == num_molecules)
-        pbar.close()
+        with tqdm(leave=False, total=num_molecules, unit="sample") as pbar:
+            for i in range(ceil(num_molecules / batch_size)):
+                B = min(batch_size, num_molecules - len(samples))
+                num_atoms = atom_sizes[torch.multinomial(atom_size_probs, B, replacement=True)]
+                coords, one_hot, charges = self._sample_flattened(num_atoms)
+                
+                # separate the molecules and append to samples
+                batch_idx = 0
+                flattened_idx = 0
+                while batch_idx < B:
+                    size = num_atoms[batch_idx]
+                    mol_coords = coords[flattened_idx:flattened_idx + size]
+                    mol_one_hot = one_hot[flattened_idx:flattened_idx + size]
+                    mol_charges = charges[flattened_idx:flattened_idx + size]
+                    if to_numpy:
+                        mol_coords = mol_coords.numpy(force=True)
+                        mol_one_hot = mol_one_hot.numpy(force=True)
+                        mol_charges = mol_charges.numpy(force=True)
+                        
+                    samples.append((mol_coords, mol_one_hot, mol_charges))
+                    flattened_idx += size
+                    batch_idx += 1
+                
+                assert(batch_idx == B and flattened_idx == num_atoms.sum())
+                pbar.update(len(samples))
+            assert(len(samples) == num_molecules)
         
         return samples

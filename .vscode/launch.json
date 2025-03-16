@@ -13,8 +13,8 @@
             "args": [
                 "--checkpoint=./checkpoints/variance_finetune_with_h",
                 "--pipeline=sample",
-                "--batch-size=8",
-                "--num-samples=15",
+                "--batch-size=64",
+                "--num-samples=100",
                 "--no-wandb",
             ]
         },
