@@ -7,12 +7,12 @@ conda activate ./.conda
 pip install -r requirements.txt
 ```
 
-# Metrics on pre-trained weights
+# Calculating metrics on pre-trained weights
 To calculate an estimate of NLL on the pretrained weights using the test set, run the following code:
 ```
-python run.py --pipeline=test --seed=42 --reruns=5 --checkpoint=./pretrained/<extension_name>
+python run.py --pipeline=test --seed=42 --reruns=5 --checkpoint=./pretrained/<model-name>
 ```
-`<extension-name>` is any one of `'vanilla-with-h'`, `'vanilla-without-h'`, `'variance-with-h'` or `'variance-without-h'`,
+where `<model-name>` is any one of `'vanilla-with-h'`, `'vanilla-without-h'`, `'variance-with-h'` or `'variance-without-h'`
 
 The following table summarises the result of running this command:
 |**Estimate of NLL**|No extensions (vanilla)|Learning variance|
@@ -23,6 +23,15 @@ The following table summarises the result of running this command:
 The extension and model hyperparameters are automatically activated based on the contents of `args.pkl` in the checkpoint folder.
 
 You may specify `--pipeline=valid` if you would like to calculate metrics using the validation set.
+
+TODO: also calculate stability metrics, etc.
+
+# Sampling from the model
+To sample from pretrained models, use the following command.
+```
+python run.py --pipeline=sample --seed=42 --num-samples=<num-samples> --checkpoint=./pretrained/<model-name>
+```
+where `<num-samples>` is the number of samples to create, e.g. 1000 and `<model-name>` is any one of `'vanilla-with-h'`, `'vanilla-without-h'`, `'variance-with-h'` or `'variance-without-h'`.
 
 # Training the model
 To train a model from scratch, run:
