@@ -24,36 +24,19 @@ The extension and model hyperparameters are automatically activated based on the
 
 You may specify `--pipeline=valid` if you would like to calculate metrics using the validation set.
 
-## Extension: variance
-To train:
+# Training the model
+To train a model from scratch, run:
 ```
-run.py --extension=variance --pipeline=train --run_name=ext_variance
+python run.py --pipeline=train --seed=42 --extension=<extension> --dataset=<dataset> --run-name=<run-name>
 ```
-This creates a folder `./checkpoints/ext_variance` with the model checkpoints
+where `extension` can be one of `vanilla` or `variance`, and `dataset` can be one of `qm9` or `qm9_no_h`.
 
-To continue from a checkpoint, run
-```
-run.py --checkpoint ./checkpoints/ext_variance
-```
+This runs for 1300 epochs by default and saves checkpoints for every epoch in `./checkpoints/<run-name>`.
 
-To estimate the NLL from a checkpoint on the validation dataset, run
+To load from a checkpoint and continue training, run
 ```
-run.py --checkpoint ./checkpoints/ext_variance --pipeline=valid --reruns=5 --seed=42 
+python run.py --pipeline=train --checkpoint="./checkpoints/<run-name>" --start-epoch=<start-epoch>
 ```
-This will set the random seed with 42 and go through 5 passes of the validation dataset and calculate metrics on both model.pth and model_ema.pth, returning the mean and standard deviations
+where `start-epoch` is zero-indexed and equals the epoch after the last full epoch currently trained at -- this is purely used for bookkeeping but the code itself does not automatically detect which epoch number to start at so you must specify this manually.
 
-
-To generate and save some molecules, run
-```
-run.py --checkpoint=./checkpoints/ext_variance --pipeline=sample --batch-size=8 --num-samples=15
-```
-
-## Testing with PyTest
-To run the tests, activate the conda environment with `conda activate ./.conda` and run the following code.
-```
-python -m pytest -s
-```
-
-This should give output similar to (more extensive than) the following.
-
-![ ](./figures/example_test_output.png)
+You do not need to specify the extension or any other hyperparamters, as these are automatically activated from `args.pkl` located in the checkpoint folder.
