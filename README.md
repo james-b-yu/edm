@@ -1,11 +1,23 @@
 # MLMI4 Group 10
-## Setting up
+# Setting up
 To create a conda environment with `python==3.13` and install the packages required for this project, run the following code.
 ```python
 conda create --prefix ./.conda python=3.13
 conda activate ./.conda
 pip install -r requirements.txt
 ```
+
+# Metrics on pre-trained weights
+To calculate an estimate of NLL on the pretrained weights using the test set, run the following code:
+```
+python run.py --pipeline=test --seed=42 --reruns=10 --batch-size=256 --checkpoint=./pretrained/<extension_name>
+```
+`<extension-name>` is any one of `'vanilla-with-h'`, `'vanilla-without-h'`, `'variance-with-h'` or `'variance-without-h'`,
+
+
+The extension and model hyperparameters are automatically activated based on the contents of `args.pkl` in the checkpoint folder.
+
+You may specify `--pipeline=valid` if you would like to calculate metrics using the validation set.
 
 ## Extension: variance
 To train:
