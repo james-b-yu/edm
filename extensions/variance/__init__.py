@@ -36,20 +36,21 @@ def run(args: Namespace, dataloaders: dict[str, DataLoader], wandb_run: None|Run
         except Exception as e:
             warnings.warn(f"Could not load model exponential moving average state dict. Initialising the EMA model with same weights as model.pth. Error was '{str(e)}'")
             model_ema.load_state_dict(torch.load(path.join(args.checkpoint, "model.pth"), map_location=args.device))
-            
-        if args.restore_optim_state:
-            try:
-                optim.load_state_dict(torch.load(path.join(args.checkpoint, "optim.pth"), map_location=args.device))
-            except Exception as e:
-                warnings.warn(f"Could not load optim state dict. Using empty initialisation. Error was '{str(e)}'")
-        if args.restore_scheduler_state:
-            try:
-                scheduler.load_state_dict(torch.load(path.join(args.checkpoint, "scheduler.pth"), map_location=args.device))        
-            except Exception as e:
-                warnings.warn(f"Could not load scheduler state dict. Using empty initialisation. Error was '{str(e)}'")
-        if args.force_start_lr is not None:        
-            for param_group in optim.param_groups:
-                param_group['lr'] = args.force_start_lr
+        
+        if args.pipeline == "train":
+            if args.restore_optim_state:
+                try:
+                    optim.load_state_dict(torch.load(path.join(args.checkpoint, "optim.pth"), map_location=args.device))
+                except Exception as e:
+                    warnings.warn(f"Could not load optim state dict. Using empty initialisation. Error was '{str(e)}'")
+            if args.restore_scheduler_state:
+                try:
+                    scheduler.load_state_dict(torch.load(path.join(args.checkpoint, "scheduler.pth"), map_location=args.device))        
+                except Exception as e:
+                    warnings.warn(f"Could not load scheduler state dict. Using empty initialisation. Error was '{str(e)}'")
+            if args.force_start_lr is not None:        
+                for param_group in optim.param_groups:
+                    param_group['lr'] = args.force_start_lr
     
     if args.pipeline == "train":
         enter_train_loop(model, model_ema, optim, scheduler, args, dataloaders["train"], dataloaders["valid"], wandb_run)
@@ -58,15 +59,15 @@ def run(args: Namespace, dataloaders: dict[str, DataLoader], wandb_run: None|Run
         model_ema.eval()
         split = args.pipeline
 
-        print(f"Performing {args.reruns} (noisy) validation epoch(s) on 'model.pth'")
+        print(f"Performing estimation of the VLB for 'model.pth' using {args.reruns} epoch(s) of the {split} set...")
         mean, std = enter_valid_loop(model, split, args, dataloaders[split])
         if ema_loaded:
-            print(f"Performing {args.reruns} (noisy) validation epoch(s) on 'model_ema.pth'")
+            print(f"Performing estimation of the VLB for 'model_ema.pth' using {args.reruns} epoch(s) of the {split} set...")
             ema_mean, ema_std = enter_valid_loop(model_ema, split, args, dataloaders[split])
         
-        print(f"mean (std) for 'model.pth':     vlb: {mean:.2f} ({std:.2f})")
+        print(f"point estimate (std) for 'model.pth':     vlb: {mean:.2f} ({std:.2f})")
         if ema_loaded:
-            print(f"mean (std) for 'model_ema.pth': vlb: {ema_mean:.2f} ({ema_std:.2f})")
+            print(f"point estimate (std) for 'model_ema.pth': vlb: {ema_mean:.2f} ({ema_std:.2f})")
     elif args.pipeline == "sample":
         model.eval()
         model_ema.eval()
