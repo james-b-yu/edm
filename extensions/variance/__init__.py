@@ -81,6 +81,8 @@ def run(args: Namespace, dataloaders: dict[str, DataLoader], wandb_run: None|Run
         if ema_loaded:
             print(f"Sampling from 'model_ema.pth'")
             samples_ema = model_ema.sample(num_molecules, batch_size, atom_sizes, atom_size_probs)
+        
+        # TODO: write these samples to disk as .xyz files
         pass
     else:
         raise NotImplementedError

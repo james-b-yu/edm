@@ -10,10 +10,15 @@ pip install -r requirements.txt
 # Metrics on pre-trained weights
 To calculate an estimate of NLL on the pretrained weights using the test set, run the following code:
 ```
-python run.py --pipeline=test --seed=42 --reruns=10 --batch-size=256 --checkpoint=./pretrained/<extension_name>
+python run.py --pipeline=test --seed=42 --reruns=5 --checkpoint=./pretrained/<extension_name>
 ```
 `<extension-name>` is any one of `'vanilla-with-h'`, `'vanilla-without-h'`, `'variance-with-h'` or `'variance-without-h'`,
 
+The following table summarises the result of running this command:
+|**Estimate of NLL**|`vanilla-with-h`|`vanilla-without-h`|`variance-with-h`|`variance-without-h`|
+|---|----|---|---|--|
+|`model.pth`|||`-122.91 (0.70)`
+|`model_ema.pth`|||`-123.74 (1.41)`
 
 The extension and model hyperparameters are automatically activated based on the contents of `args.pkl` in the checkpoint folder.
 
