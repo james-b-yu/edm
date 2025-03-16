@@ -107,7 +107,7 @@ def enter_train_loop(model: VarianceEDM, model_ema: VarianceEDM, optim: torch.op
             })
 
 def enter_valid_loop(model: VarianceEDM, split: Literal["valid", "test"], args: Namespace, dl: DataLoader):
-    """go through valid or test set many times and return mean and std of vlb, according to args.reruns
+    """go through valid or test set many times and return point estimate and estimated std of the point estimate of the vlb. Go through the set `args.reruns` times
 
     Args:
         model (VarianceEDM): the model
@@ -115,14 +115,14 @@ def enter_valid_loop(model: VarianceEDM, split: Literal["valid", "test"], args: 
         args (Namespace): arguments
         dl (DataLoader): dataloader
         
-    Returns tuple[float, float]: mean and std of vlbs across runs
+    Returns tuple[float, float]: point estimate and estimated std of this point estimate of the vlbs across runs
     """
     vlbs = []
     for _ in tqdm(range(args.reruns)):
         vlb, _ = one_valid_epoch(args, split, 0, dl, model)
         vlbs.append(vlb)
     vlbs = torch.tensor(vlbs, dtype=torch.float32, device="cpu")
-    return float(vlbs.mean()), float(vlbs.std())
+    return float(vlbs.mean()), float(vlbs.std() * (args.reruns ** -0.5))
   
 
 def _update_ema(beta: float, model: VarianceEDM, model_ema: VarianceEDM):
