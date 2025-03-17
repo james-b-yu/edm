@@ -15,7 +15,7 @@ from utils.diffusion import demean_using_mask
 from utils.files import check_hash_file, hash_file
 from utils.qm9 import charge_to_idx, ensure_qm9_raw_data, ensure_qm9_raw_excluded, ensure_qm9_raw_splits, ensure_qm9_raw_thermo, ensure_qm9_processed
 
-from dataset_info import DATASET_INFO
+from configs.dataset_config import DATASET_INFO
 
 @dataclass
 class EDMDatasetItem:
