@@ -6,7 +6,7 @@ from tqdm import tqdm
 
 import torch
 from data import EDMDataloaderItem, get_util_tensors
-from model_config import EDMConfig
+from configs.model_config import EDMConfig
 from models.base import EGNN, BaseEDM
 from utils.diffusion import cdf_standard_gaussian
 
