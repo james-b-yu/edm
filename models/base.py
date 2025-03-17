@@ -6,7 +6,7 @@ import torch
 from torch import nn
 from tqdm import tqdm
 from data import EDMDataloaderItem
-from model_config import EDMConfig, EGCLConfig, EGNNConfig
+from configs.model_config import EDMConfig, EGCLConfig, EGNNConfig
 from utils.diffusion import cdf_standard_gaussian, cosine_beta_schedule, polynomial_schedule
 
 class EGCL(nn.Module):
