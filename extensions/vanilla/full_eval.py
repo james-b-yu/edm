@@ -186,13 +186,12 @@ def polynomial_schedule_just_sigma(timesteps: int, device: torch.device|str, pow
 
 def run_eval(args: Namespace, dl: DataLoader):
     print("This calculates the NLL, Atom stability and Molecule Stability against the test data.")
-    total_nll_acc = 0.0
+    nlls = []
     total_stable_atoms = 0
     total_stable_molecules = 0
     total_molecules = 0
     total_atoms = 0
     total_samples = 0
-    num_batches = 0
     
     config = get_config_from_args(args, dl.dataset.num_atom_types)  # type:ignore
     
@@ -245,13 +244,8 @@ def run_eval(args: Namespace, dl: DataLoader):
         # Compute cross-entropy loss
         nll_features = F.cross_entropy(pred_eps_feat, labels, reduction="sum") / batch_size
 
-        
-        total_nll_per_batch += nll_coords + nll_features
-        total_nll_acc += (nll_coords.detach() + nll_features.detach()) * batch_size # save on memory using detach()
-        
-        num_batches += 1
-        total_samples += batch_size
-        avg_batch_nll = total_nll_per_batch
+        total_nll_per_batch += nll_coords.detach() + nll_features.detach()
+        nlls.append(total_nll_per_batch)
         
         ######################
         # calculate atom stability
@@ -285,8 +279,8 @@ def run_eval(args: Namespace, dl: DataLoader):
     overall_atom_stability = (total_stable_atoms / total_atoms) * 100 if total_samples > 0 else 0
     overall_molecule_stability = (total_stable_molecules / total_samples) * 100 if total_molecules > 0 else 0
 
-    avg_nll = avg_batch_nll / total_samples
-    print(f"Total samples: {total_samples}")
+    avg_nll = sum(nlls) / len(nlls)
+    print(f"Total samples: {total_molecules}")
     print(f"Final results: MSE: {mse:.2f} \n NLL: {avg_nll:.2f}")
     print(f"Overall Atom Stability: {overall_atom_stability:.2f}%")
     print(f"Overall Molecule Stability: {overall_molecule_stability:.2f}%")
