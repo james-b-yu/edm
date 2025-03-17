@@ -7,9 +7,9 @@ import warnings
 
 import torch
 from data import get_qm9_dataloader
-from dataset_info import DATASET_INFO
+from configs.dataset_config import DATASET_INFO
 from loops import enter_train_loop, enter_valid_loop
-from model_config import get_config_from_args
+from configs.model_config import get_config_from_args
 from models.variance_edm import VarianceEDM
 from models.base import BaseEDM
 from models.edm import EDM

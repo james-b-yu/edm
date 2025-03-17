@@ -5,7 +5,7 @@ from warnings import warn
 
 import torch
 from data import EDMDataloaderItem
-from model_config import EDMConfig
+from configs.model_config import EDMConfig
 from models.base import EGNN, BaseEDM
 from utils.diffusion import cdf_standard_gaussian
 
