@@ -41,7 +41,7 @@ def find_graph_components(A):
 def get_disconnected_penalty(batch_coords, batch_features, dataset_name='qm9', use_h=True):
     batch_penalties = torch.zeros((batch_coords.shape[0],))
     dataset_info = get_dataset_info(dataset_name, use_h)
-    num_types = len(dataset_info['atom_decoder'])
+    num_types = len(dataset_info['atom_types'])
 
     batch_coords = batch_coords.view(-1, 3)
     batch_features = batch_features[:, :num_types].view(-1, num_types).type(torch.float32)

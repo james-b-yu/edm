@@ -84,7 +84,7 @@ def enter_train_valid_test_loop(args: Namespace, dataloaders: dict[str, DataLoad
     
     for _, dl in dataloaders.items():
         assert(isinstance(dl.dataset, EDMDataset))
-        features_d = dl.dataset.num_atom_classes + 1
+        features_d = dl.dataset.num_atom_types + 1
     
     gradnorm_queue = Queue()
     gradnorm_queue.add(3000)  # Add large value that will be flushed.
@@ -164,7 +164,7 @@ def enter_train_valid_test_loop(args: Namespace, dataloaders: dict[str, DataLoad
 def enter_sample(args: Namespace, dataloaders: dict[str, DataLoader], wandb_run: None|Run):
     for _, dl in dataloaders.items():
         assert(isinstance(dl.dataset, EDMDataset))
-        features_d = dl.dataset.num_atom_classes + 1
+        features_d = dl.dataset.num_atom_types + 1
     
 
     model = VarianceDiffusion(egnn_config=EGNNConfig(

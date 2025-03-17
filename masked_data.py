@@ -33,7 +33,7 @@ class QM9ProcessedDataClass:
 
 class QM9MaskedDataset(td.Dataset):
     def __init__(self, use_h: bool, split: Literal["train", "valid", "test"]):
-        self.num_atom_classes=QM9["num_atom_classes"] if use_h else QM9_NO_H["num_atom_classes"]
+        self.num_atom_types=QM9["num_atom_types"] if use_h else QM9_NO_H["num_atom_types"]
         self.max_nodes=QM9["largest_molecule_size"] if use_h else QM9_NO_H["largest_molecule_size"]
         self.size_histogram=QM9["molecule_size_histogram"] if use_h else QM9_NO_H["molecule_size_histogram"]
         

@@ -48,11 +48,11 @@ def get_adjacency(coords, atom_type, dataset_info):
             p2 = np.array([x[j], y[j], z[j]])
             dist = np.sqrt(np.sum((p1 - p2) ** 2))
 
-            atom_1 = dataset_info['atom_decoder'][atom_type[i]]
-            atom_2 = dataset_info['atom_decoder'][atom_type[j]]
+            atom_1 = dataset_info['atom_types'][atom_type[i]]
+            atom_2 = dataset_info['atom_types'][atom_type[j]]
             s = sorted((atom_type[i], atom_type[j]))
-            pair = (dataset_info['atom_decoder'][s[0]],
-                    dataset_info['atom_decoder'][s[1]])
+            pair = (dataset_info['atom_types'][s[0]],
+                    dataset_info['atom_types'][s[1]])
             
             if dataset_info['name'] == 'qm9':
                 bond_order, dist_diff = get_bond_order(atom_1, atom_2, dist)
