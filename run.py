@@ -17,6 +17,7 @@ from models.edm import EDM
 from os import path
 import pickle
 import wandb
+from eval import compute_nll, get_test_dataloader
 
 from args import args, parser
 

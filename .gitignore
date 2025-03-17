@@ -180,3 +180,6 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+/2025-03-10 Partially Pretrained Own Architecture
+drugs_featurized.msgpack
+scheduler_epoch_576.pth
