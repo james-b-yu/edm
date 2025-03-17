@@ -14,7 +14,7 @@ from args import args
 from utils.files import check_hash_file, hash_file
 from utils.qm9 import charge_to_idx, ensure_qm9_raw_data, ensure_qm9_raw_excluded, ensure_qm9_raw_splits, ensure_qm9_raw_thermo, ensure_qm9_processed
 
-from meta.dataset_meta import QM9_WITH_H, QM9_WITHOUT_H
+from configs.dataset_config import QM9, QM9_NO_H
 
 @dataclass
 class EDMDatasetItem:
@@ -110,7 +110,7 @@ class EDMDataset(ABC, td.Dataset):
 
 class QM9Dataset(EDMDataset):
     def __init__(self, use_h: bool, split: Literal["train", "valid", "test"]):
-        super().__init__(num_atom_classes=QM9_WITH_H["num_atom_classes"] if use_h else QM9_WITHOUT_H["num_atom_classes"], max_nodes=QM9_WITH_H["largest_molecule_size"] if use_h else QM9_WITHOUT_H["largest_molecule_size"], size_histogram=QM9_WITH_H["molecule_size_histogram"] if use_h else QM9_WITHOUT_H["molecule_size_histogram"])
+        super().__init__(num_atom_classes=QM9["num_atom_classes"] if use_h else QM9_NO_H["num_atom_classes"], max_nodes=QM9["largest_molecule_size"] if use_h else QM9_NO_H["largest_molecule_size"], size_histogram=QM9["molecule_size_histogram"] if use_h else QM9_NO_H["molecule_size_histogram"])
         
         assert split in ["train", "valid", "test"]
         

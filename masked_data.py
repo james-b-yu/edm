@@ -15,7 +15,7 @@ from utils.diffusion import demean_using_mask
 from utils.files import check_hash_file, hash_file
 from utils.qm9 import charge_to_idx, ensure_qm9_raw_data, ensure_qm9_raw_excluded, ensure_qm9_raw_splits, ensure_qm9_raw_thermo, ensure_qm9_processed
 
-from qm9_meta import QM9_WITH_H, QM9_WITHOUT_H
+from configs.dataset_config import QM9, QM9_NO_H
 
 QM9Attributes = Literal["index", "A", "B", "C", "mu", "alpha", "homo", "lumo", "gap", "r2", "zpve", "U0", "U", "H", "G", "Cv", "omega1", "zpve_thermo", "U0_thermo", "U_thermo", "H_thermo", "G_thermo", "Cv_thermo"]
 QM9ProcessedData = dict[str | Literal["num_atoms", "classes", "charges", "positions", "one_hot", QM9Attributes], torch.Tensor]
@@ -33,9 +33,9 @@ class QM9ProcessedDataClass:
 
 class QM9MaskedDataset(td.Dataset):
     def __init__(self, use_h: bool, split: Literal["train", "valid", "test"]):
-        self.num_atom_classes=QM9_WITH_H["num_atom_classes"] if use_h else QM9_WITHOUT_H["num_atom_classes"]
-        self.max_nodes=QM9_WITH_H["largest_molecule_size"] if use_h else QM9_WITHOUT_H["largest_molecule_size"]
-        self.size_histogram=QM9_WITH_H["molecule_size_histogram"] if use_h else QM9_WITHOUT_H["molecule_size_histogram"]
+        self.num_atom_classes=QM9["num_atom_classes"] if use_h else QM9_NO_H["num_atom_classes"]
+        self.max_nodes=QM9["largest_molecule_size"] if use_h else QM9_NO_H["largest_molecule_size"]
+        self.size_histogram=QM9["molecule_size_histogram"] if use_h else QM9_NO_H["molecule_size_histogram"]
         
         assert split in ["train", "valid", "test"]
         

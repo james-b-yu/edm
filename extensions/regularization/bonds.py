@@ -1,5 +1,5 @@
 import numpy as np
-from meta.bond_meta import BONDS_1, BONDS_2, BONDS_3, MARGIN_1, MARGIN_2, MARGIN_3
+from configs.bond_config import BONDS_1, BONDS_2, BONDS_3, MARGIN_1, MARGIN_2, MARGIN_3
 
 def get_bond_order(atom_1, atom_2, distance, check_exists=False):
     distance = 100 * distance

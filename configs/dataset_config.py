@@ -1,4 +1,4 @@
-QM9_WITH_H = {
+QM9 = {
     'name': 'qm9',
     'num_atom_classes': 5,
     'atom_encoder': {'H': 0, 'C': 1, 'N': 2, 'O': 3, 'F': 4},
@@ -10,7 +10,7 @@ QM9_WITH_H = {
     'with_h': True
 }
 
-QM9_WITHOUT_H = {
+QM9_NO_H = {
     'name': 'qm9',
     'num_atom_classes': 4,
     'atom_encoder': {'C': 0, 'N': 1, 'O': 2, 'F': 3},
@@ -21,7 +21,7 @@ QM9_WITHOUT_H = {
 }
 
 
-GEOM_WITH_H = {
+GEOM = {
     'name': 'geom',
     'atom_encoder': {'H': 0, 'B': 1, 'C': 2, 'N': 3, 'O': 4, 'F': 5, 'Al': 6, 'Si': 7,
     'P': 8, 'S': 9, 'Cl': 10, 'As': 11, 'Br': 12, 'I': 13, 'Hg': 14, 'Bi': 15},
@@ -48,7 +48,7 @@ GEOM_WITH_H = {
 }
 
 
-GEOM_WITHOUT_H = {
+GEOM_NO_H = {
     'name': 'geom',
     'atom_encoder': {'B': 0, 'C': 1, 'N': 2, 'O': 3, 'F': 4, 'Al': 5, 'Si': 6, 'P': 7, 'S': 8, 'Cl': 9, 'As': 10,
                      'Br': 11, 'I': 12, 'Hg': 13, 'Bi': 14},
@@ -71,13 +71,13 @@ GEOM_WITHOUT_H = {
 def get_dataset_info(dataset_name, use_h=True):
     if dataset_name == 'qm9':
         if use_h:
-            return QM9_WITH_H
+            return QM9
         else:
-            return QM9_WITHOUT_H
+            return QM9_NO_H
     elif dataset_name == 'geom':
         if use_h:
-            return GEOM_WITH_H
+            return GEOM
         else:
-            return GEOM_WITHOUT_H
+            return GEOM_NO_H
     else:
         raise Exception(f"Wrong dataset {dataset_name}")

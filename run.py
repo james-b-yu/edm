@@ -24,7 +24,7 @@ if __name__ == "__main__":
                 args = parser.parse_args(namespace=args_disk)
         except Exception as _:
             pass
-    if args.dataset in ["qm9", "qm9_no_h"]:
+    if args.dataset in ["qm9", "qm9_without_h"]:
         dataloaders = {
             split: get_qm9_dataloader(use_h=args.dataset=="qm9", split=split, batch_size=args.batch_size) for split in ("train", "valid", "test")
         }

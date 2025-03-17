@@ -2,7 +2,7 @@ import torch
 import numpy as np
 from collections import deque
 from extensions.regularization import bonds
-from meta.dataset_meta import get_dataset_info
+from configs.dataset_config import get_dataset_info
 
 def bfs(start, A):
     queue = deque()
