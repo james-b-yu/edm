@@ -8,6 +8,7 @@ import numpy as np
 from rdkit import Chem
 from rdkit.Chem import AllChem
 from masked_model import MaskedEDM, get_config_from_args
+from losses import compute_loss_and_nll
 from qm9 import bond_analyze
 from configs.datasets_config import get_dataset_info
 import pickle
@@ -16,9 +17,8 @@ import os
 @torch.no_grad()
 
 def remove_mean_with_mask(coords, node_mask):
-    """Centers molecular coordinates by subtracting the mean, ignoring padding."""
+    """Centers molecular coordinates by subtracting the mean."""
     valid_mask = node_mask > 0  # Boolean mask for valid atoms
-    valid_mask = valid_mask  # Expand dims to match (batch, num_atoms, 3)
 
     masked_coords = coords * valid_mask  # Zero out invalid atoms
 
@@ -93,9 +93,7 @@ def compute_atom_stability(one_hot, charges, coords, node_mask, dataset_info):
                     order = bond_analyze.get_bond_order(atom1, atom2, dist)
                 
                 # print(f"Bond: {atom1}-{atom2}, Distance: {dist:.3f}, Order: {order}")
-
-                # Allow bond orders to be calculated naturally without arbitrary clamping
-                nr_bonds[i] = min(nr_bonds[i] + order, 4)  # Limit max bonds to 4 per atom
+                nr_bonds[i] = min(nr_bonds[i] + order, 4)  # Limit max bonds to 4 per atom as that is the max possible value for highest val atom type
                 nr_bonds[j] = min(nr_bonds[j] + order, 4)
 
                 # print(f"Updated bonds: Atom {i} ({atom1}) = {nr_bonds[i]}, Atom {j} ({atom2}) = {nr_bonds[j]}")
@@ -126,7 +124,6 @@ def compute_atom_stability(one_hot, charges, coords, node_mask, dataset_info):
 
     return torch.nn.utils.rnn.pad_sequence(stability_results, batch_first=True, padding_value=False)
 
-
 def compute_molecule_stability(one_hot, charges, coords, node_mask):
     """
     Computes molecule stability based on atomic stability.
@@ -140,24 +137,27 @@ def compute_molecule_stability(one_hot, charges, coords, node_mask):
         node_mask (torch.Tensor): Mask indicating valid atoms [batch, num_atoms].
 
     Returns:
-        float: Percentage of stable molecules in the batch.
+        tuple: (Number of stable molecules, total number of molecules)
     """
     batch_size = one_hot.shape[0]  # Number of molecules in batch
 
     # Compute atomic stability
-    is_stable_atoms = compute_atom_stability(one_hot, charges, coords, node_mask, get_dataset_info() )
+    is_stable_atoms = compute_atom_stability(one_hot, charges, coords, node_mask, get_dataset_info())
 
-    # Split into molecules using batch_sizes
+    # Get the number of nodes per molecule from the node_mask.
+    n_nodes_per_molecule = node_mask.sum(dim=1).long()
+
+    # Split into molecules using n_nodes_per_molecule.
     stable_molecules = 0
     index = 0
-    for n in range(batch_size):
-        molecule_stability = is_stable_atoms[index : index + n]
+    for n in n_nodes_per_molecule:
+        molecule_stability = is_stable_atoms[index: index + n]
         is_molecule_stable = molecule_stability.numel() > 0 and molecule_stability.all().item()
-        if is_molecule_stable == True:
+        if is_molecule_stable:
             stable_molecules += 1
         index += n
 
-    return stable_molecules, int(batch_size)
+    return stable_molecules, batch_size
 
 
 # need to add this into NLL as currently sigma just = 1.0
@@ -226,12 +226,12 @@ def run_eval(args: Namespace, dl: DataLoader):
         # calculate the NLL
         ######################
         
-        # sigma_t = noise_schedule["sigma"][time_int].view(batch_size, 1, 1)  # Ensure correct shape for broadcasting
-        # print(f"sigma t : {sigma_t}")
-        sigma_t = 0.5
         D = eps_coord.shape[1]  
+        sigma_t = polynomial_schedule_just_sigma(args.num_steps, config.device)
+        # when using proper noise schedule NLL explodes
+        sigma = 0.5 # noise_schedule
         squared_diff = ((pred_eps_coord - eps_coord) ** 2).sum(dim=-1)
-        log_prob_coords = - (squared_diff / (2 * sigma_t**2)) - (D / 2) * torch.log(torch.tensor(2 * torch.pi * sigma_t**2, device=config.device) + 1e-8) # can include a small epsilon for log stability
+        log_prob_coords = - (squared_diff / (2 * sigma**2)) - (D / 2) * torch.log(torch.tensor(2 * torch.pi * sigma**2, device=config.device) + 1e-8) # can include a small epsilon for log stability
 
         nll_coords = log_prob_coords.sum() / batch_size
         
@@ -277,14 +277,15 @@ def run_eval(args: Namespace, dl: DataLoader):
         
         running_atom_stab = (total_stable_atoms / total_atoms) * 100
         running_molecule_stab = (total_stable_molecules / total_molecules) * 100
+        total_samples += batch_size
         
         # print progress bar with value for each batch
-        pbar.set_description(f"Batch MSE {mse:.2f}. Running NLL: {avg_batch_nll}. Running atom stability: {running_atom_stab} %. Running molecule stab: {running_molecule_stab} %")
+        pbar.set_description(f"Batch MSE {mse:.2f}. Running NLL: {total_nll_per_batch}. Running atom stability: {running_atom_stab} %. Running molecule stab: {running_molecule_stab} %")
         
     overall_atom_stability = (total_stable_atoms / total_atoms) * 100 if total_samples > 0 else 0
     overall_molecule_stability = (total_stable_molecules / total_samples) * 100 if total_molecules > 0 else 0
 
-    avg_nll = total_nll_acc / total_samples
+    avg_nll = avg_batch_nll / total_samples
     print(f"Total samples: {total_samples}")
     print(f"Final results: MSE: {mse:.2f} \n NLL: {avg_nll:.2f}")
     print(f"Overall Atom Stability: {overall_atom_stability:.2f}%")

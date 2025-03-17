@@ -11,28 +11,28 @@ import re
 # argument_path = ''
 checkpoint_path = 'checkpoints/pretrained/model.pth'
 
-# def load_model(checkpoint_path, args_path):
-#     with open(args_path, "rb") as f:
-#         args = pickle.load(f)
+def load_model(checkpoint_path, args_path):
+    with open(args_path, "rb") as f:
+        args = pickle.load(f)
 
-#     if isinstance(args, Namespace):
-#         args = vars(args)
+    if isinstance(args, Namespace):
+        args = vars(args)
         
-#     # config = EGNNConfig(
-#     #     num_layers=args.get("num_layers"),
-#     #     hidden_dim=256,
-#     #     num_atom_types=5,
-#     #     # node_attr_d=args.get("node_attr_d", 0),
-#     #     # edge_attr_d=args.get("edge_attr_d", 0),
-#     #     # use_tanh=args.get("use_tanh", True),
-#     #     # tanh_range=args.get("tanh_range", 15.0)
-#     # )
+    # config = EGNNConfig(
+    #     num_layers=args.get("num_layers"),
+    #     hidden_dim=256,
+    #     num_atom_types=5,
+    #     # node_attr_d=args.get("node_attr_d", 0),
+    #     # edge_attr_d=args.get("edge_attr_d", 0),
+    #     # use_tanh=args.get("use_tanh", True),
+    #     # tanh_range=args.get("tanh_range", 15.0)
+    # )
     
-#     model = EGNN(config)
-#     checkpoint = torch.load(checkpoint_path, map_location=torch.device("cpu"))
-#     model.load_state_dict(checkpoint, strict=False)
-#     model.eval()
-#     return model
+    model = EGNN(config)
+    checkpoint = torch.load(checkpoint_path, map_location=torch.device("cpu"))
+    model.load_state_dict(checkpoint, strict=False)
+    model.eval()
+    return model
 
 def get_test_dataloader():
     return get_qm9_dataloader(use_h=True, split="test", batch_size=64)

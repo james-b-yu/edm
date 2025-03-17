@@ -122,10 +122,6 @@ def get_bond_order(atom1, atom2, distance, check_exists=False):
     # margin1, margin2 and margin3 have been tuned to maximize the stability of
     # the QM9 true samples.
     
-    # print(f"distance marker: {distance}")
-    # print(f"actual distnace between atoms: {bonds1[atom1][atom2]}")
-    # print(f"margin: {margin1}")
-    
     
     if distance < bonds1[atom1][atom2] + margin1:
 
