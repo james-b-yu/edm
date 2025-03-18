@@ -13,6 +13,7 @@ from configs.model_config import get_config_from_args
 from models.variance_edm import VarianceEDM
 from models.base import BaseEDM
 from models.edm import EDM
+from models.regularization_edm import RegularizationEDM
 
 from os import path
 import pickle
@@ -43,6 +44,8 @@ if __name__ == "__main__":
         Model = EDM
     elif args.extension == "variance":
         Model = VarianceEDM
+    elif args.extension == "regularization":
+        Model = RegularizationEDM
     else:
         raise NotImplementedError
     
