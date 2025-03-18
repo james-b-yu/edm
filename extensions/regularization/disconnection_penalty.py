@@ -1,7 +1,7 @@
 import torch
 import numpy as np
 from collections import deque
-from extensions.regularization import bonds
+from extensions.regularization import compute_bonds
 from configs.dataset_config import get_dataset_info
 
 def bfs(start, A):
@@ -49,7 +49,7 @@ def get_disconnection_penalty(batch_coords, batch_features, dataset_name='qm9', 
 
     for (i, coords) in enumerate(batch_coords):
         penalty = 0.
-        A, distances = bonds.get_adjacency(coords, atom_types[i], dataset_info)
+        A, distances = compute_bonds.get_adjacency(coords, atom_types[i], dataset_info)
         components = find_graph_components(A)
         if len(components) > 1:
             for (_, nodes) in components.items():
