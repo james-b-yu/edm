@@ -62,9 +62,9 @@ class Sampler():
             predicted_coords, predicted_features = self.model(n_nodes, coords, features, edges, reduce_matrix, demean_matrix, time_tensor)
 
             # Get noise schedule values
-            eps = 1e-5  # Small constant to prevent division by very small numbers
-            alpha_t = torch.clamp(self.noise_schedule["alpha"][t], min=eps)
-            sigma_t = torch.clamp(self.noise_schedule["sigma"][t], min=eps)
+            min_eps = 1e-5  # Small constant to prevent division by very small numbers
+            alpha_t = torch.clamp(self.noise_schedule["alpha"][t], min=min_eps)
+            sigma_t = torch.clamp(self.noise_schedule["sigma"][t], min=min_eps)
 
             # Generate random noise and enforce zero center of gravity
             epsilon_x = torch.randn_like(coords)
@@ -174,7 +174,7 @@ dummy_config = EGNNConfig(
     features_d=5,      # Number of atom types
     node_attr_d=0,     # Additional attributes per node
     edge_attr_d=0,     # Additional attributes per edge
-    hidden_d=256,       # Hidden layer size
+    hidden_d=256,      # Hidden layer size
     num_layers=9       # Number of EGNN layers
 )
 

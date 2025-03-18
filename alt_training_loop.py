@@ -22,7 +22,8 @@ def train_edm(num_epochs=10, batch_size=64, learning_rate=1e-4, num_steps=1000,
     print(f"[INFO] Using device: {device}")
 
     # ✅ Load dataset (Subset: 10% for faster testing)
-    dataset = QM9Dataset(use_h=True, split="train")
+    dataset_name, use_h = "qm9", True
+    dataset = QM9Dataset(use_h=use_h, split="train")
     np.random.seed(42)
     subset_indices = np.random.choice(len(dataset), int(0.1 * len(dataset)), replace=False)
     sampler = torch.utils.data.SubsetRandomSampler(subset_indices)
@@ -33,7 +34,7 @@ def train_edm(num_epochs=10, batch_size=64, learning_rate=1e-4, num_steps=1000,
     print(f"[INFO] Dataset Loaded: {len(sampler)} molecules in training set.")
 
     # ✅ Model configuration
-    config = EGNNConfig(features_d=5, node_attr_d=0, edge_attr_d=0, hidden_d=256, num_layers=9)
+    config = EGNNConfig(features_d=5, node_attr_d=0, edge_attr_d=0, hidden_d=256, num_layers=9, dataset_name=dataset_name, use_h=use_h)
     model = EGNN(config).to(device)
 
     optimizer = optim.Adam(model.parameters(), lr=learning_rate)
