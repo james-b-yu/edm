@@ -20,7 +20,8 @@ def train_edm(num_epochs=10, batch_size=64, learning_rate=1e-4, num_steps=1000, 
     print(f"[INFO] Using device: {device}")
 
     # Load full dataset
-    dataset = QM9Dataset(use_h=True, split="train")
+    dataset_name, use_h = "qm9", True
+    dataset = QM9Dataset(use_h=use_h, split="train")
 
     # Set seed for reproducibility
     portion = 1
@@ -43,7 +44,9 @@ def train_edm(num_epochs=10, batch_size=64, learning_rate=1e-4, num_steps=1000, 
         node_attr_d=0,  
         edge_attr_d=0,  
         hidden_d=256,   
-        num_layers=9    
+        num_layers=9,
+        dataset_name=dataset_name,
+        use_h=use_h  
     )
 
     # Initialize model
@@ -185,11 +188,12 @@ def validate_edm(batch_size=64, num_steps=1000):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
     # Load dataset (use validation set)
-    dataset = QM9Dataset(use_h=True, split="valid")
+    dataset_name, use_h = "qm9", True
+    dataset = QM9Dataset(use_h=use_h, split="valid")
     dataloader = torch.utils.data.DataLoader(dataset, batch_size=batch_size, collate_fn=collate_fn)
 
     # Load trained model
-    config = EGNNConfig(features_d=5, node_attr_d=0, edge_attr_d=0, hidden_d=256, num_layers=9)
+    config = EGNNConfig(features_d=5, node_attr_d=0, edge_attr_d=0, hidden_d=256, num_layers=9, dataset_name=dataset_name, use_h=use_h)
     model = EGNN(config).to(device)
     model.load_state_dict(torch.load("trained_edm.pth"))
     model.eval()  # Set model to eval mode

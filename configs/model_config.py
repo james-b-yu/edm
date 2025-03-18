@@ -10,6 +10,8 @@ class EGCLConfig:
     device: torch.device|str = "cuda"
     hidden_dim: int = 256
     tanh_multiplier: float = 15.
+    dataset_name: str = "qm9"
+    use_h: bool = True
 
 @dataclass
 class EGNNConfig(EGCLConfig):
@@ -35,4 +37,6 @@ def get_config_from_args(args: Namespace, num_atom_types: int):
         schedule_type=args.noise_schedule,
         coord_in_scale=1.,
         one_hot_in_scale=0.25,
-        charge_in_scale=0.1)
+        charge_in_scale=0.1,
+        dataset_name=args.dataset.split('_')[0],
+        use_h=('_no_h' not in args.dataset))
