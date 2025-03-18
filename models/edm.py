@@ -5,7 +5,7 @@ from warnings import warn
 from tqdm import tqdm
 
 import torch
-from data import EDMDataloaderItem, get_util_tensors
+from data import EDMDataloaderItem,get_util_tensors
 from configs.model_config import EDMConfig
 from models.base import EGNN, BaseEDM
 from utils.diffusion import cdf_standard_gaussian
@@ -14,40 +14,6 @@ from utils.diffusion import cdf_standard_gaussian
 class EDM(BaseEDM):
     """Vanilla EDM (no extensions)
     """        
-    def __init__(self, config: EDMConfig):
-        super().__init__(config)
-        
-        # Polynomial noise schedule parameters
-        T = config.num_steps + 1  # Total diffusion steps
-        s = 1e-5  # Small stability factor
-
-        # Define the polynomial noise schedule
-        t = torch.linspace(0, 1, T, device=config.device)  # Normalized time steps
-        f_t = 1 - t**2  # Quadratic function
-        alpha = (1 - 2 * s) * f_t + s  # Compute alpha_t
-        sigma = torch.sqrt(1 - alpha**2)  # Compute sigma_t
-        beta = 1 - alpha  # Compute beta_t
-
-        # Compute cumulative product of alphas for transition steps
-        alpha_L = torch.cat([alpha[1:], alpha[-1].unsqueeze(0)])
-
-        # Store the schedule
-        self.schedule = {
-            "alpha": alpha,
-            "alpha_L": alpha_L,
-            "beta": beta,
-            "sigma": sigma,
-            "alpha_squared": alpha**2,
-            "alpha_squared_L": alpha_L**2,
-            "sigma_squared": sigma**2,
-            "sigma_squared_L": sigma**2  # Can adjust if needed
-        }
-
-        # Log Variance for Variational Lower Bound (VLB) Estimation
-        self.V_x = (1 - alpha**2).log().to(config.device)  # Log variance for coordinates
-        self.V_h = self.V_x[:, None].repeat(1, config.num_atom_types + 1).to(config.device)  # Features same schedule
-
-            
     def get_mse(self, data: EDMDataloaderItem, force_t: None|int = None):
         s_coords, s_one_hot, s_charges = self.scale_inputs(data.coords, data.one_hot, data.charges)
         s_features = torch.cat([s_one_hot, s_charges], dim=-1)
@@ -98,17 +64,17 @@ class EDM(BaseEDM):
         
         t = t_nodes_int / self.config.num_steps
         
-        alf_0 = self.schedule["alpha"][0]
-        sig_0 = self.schedule["sigma"][0]
+        alf_0 = self.schedule.alpha[0]
+        sig_0 = self.schedule.sigma[0]
+        
+        alf_nodes = self.schedule.alpha[t_nodes_int]
+        sig_nodes = self.schedule.sigma[t_nodes_int]
+        
 
-        alf_nodes = self.schedule["alpha"][t_nodes_int]
-        sig_nodes = self.schedule["sigma"][t_nodes_int]
-
-        alf_sq_batch = self.schedule["alpha_squared"][t_batch_int]
-        alf_sq_L_batch = self.schedule["alpha_squared_L"][t_batch_int]
-        sig_sq_batch = self.schedule["sigma_squared"][t_batch_int]
-        sig_sq_L_batch = self.schedule["sigma_squared_L"][t_batch_int]
-
+        alf_sq_batch = self.schedule.alpha_squared[t_batch_int]
+        alf_sq_L_batch = self.schedule.alpha_squared_L[t_batch_int]
+        sig_sq_batch = self.schedule.sigma_squared[t_batch_int]
+        sig_sq_L_batch = self.schedule.sigma_squared_L[t_batch_int]
         
         eps_coords = data.demean @ torch.randn_like(s_coords)
         eps_features = torch.randn_like(s_features)
@@ -176,101 +142,97 @@ class EDM(BaseEDM):
         return van_vlb_est.mean(), avr_sq_dist
     
     def std_x(self, time: int | torch.Tensor):
-        """get generative model backward standard deviation at time t for coords
+        """noise schedule standard deviation."""
+        return self.schedule.sigma[time]  # sqrt(sigma_squared)
 
-        Args:
-            time (int | torch.Tensor): integer or long tensor
-
-        Returns:
-            torch.Tensor: [time] vector of std devs
-        """
-        
-        res = (0.5 * self.V_x[time]).exp()
-        
-        if isinstance(time, int):
-            res = res.squeeze()
-        return res
-    
     def std_h(self, time: int | torch.Tensor):
-        """get generative model backward standard deviation at time t for features
+        """noise schedule standard deviation."""
+        return self.schedule.sigma[time]  # Apply to all feature dimensions
 
-        Args:
-            time (int | torch.Tensor): integer or long tensor
+    def gamma_x(self, time: int | torch.Tensor):
+        """noise schedule variance."""
+        return self.schedule.sigma_squared[time]
 
-        Returns:
-            torch.Tensor: [time, features_d] matrix of variances
-        """
-        res = (0.5 * self.V_h[time]).exp()
-        
-        if isinstance(time, int):
-            res = res.squeeze()
-        return res
+    def gamma_h(self, time: int | torch.Tensor):
+        """noise schedule variance."""
+        return self.schedule.sigma_squared[time]  # Apply to all feature dimensions
 
     @torch.no_grad()
     def _sample_flattened(self, num_atoms: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        # print("Here in Flattened Vanilla EDM with Polynomial Noise Schedule")
-        
-        assert num_atoms.dtype == torch.long and num_atoms.dim() == 1, \
-            "You must provide a tensor of length [B] and type long, where B is the number of molecules to create"
-        assert not self.training, "We don't want to be training here"
+        """
+        Implements the standard EDM sampling algorithm from the paper.
+
+        Args:
+            num_atoms (torch.Tensor): Tensor containing the number of atoms per molecule in the batch.
+
+        Returns:
+            Tuple of tensors (coords, one_hot, charges) representing the final molecule.
+        """
+        assert num_atoms.dtype == torch.long and num_atoms.dim() == 1, "Provide a tensor of shape [B] with dtype long."
+        assert not self.training, "Sampling should not be performed during training."
 
         B = int(num_atoms.size(0))  # Number of molecules
-        N = int(num_atoms.sum())    # Total number of atoms
+        N = int(num_atoms.sum())  # Total number of atoms
 
         edges, reduce, demean, expand_idx, batch_mean, batch_sum = get_util_tensors(num_atoms)
 
-        # Initialize noisy coordinates and features
-        coords = demean @ torch.randn(size=(N, 3), dtype=torch.float32, device=self.config.device)
-        feats = torch.randn(size=(N, self.config.num_atom_types + 1), dtype=torch.float32, device=self.config.device)
+        # Step 1: Initialize z_T from a standard normal distribution
+        z_coords = demean @ torch.randn(size=(N, 3), dtype=torch.float32, device=self.config.device)
+        z_features = torch.randn(size=(N, self.config.num_atom_types + 1), dtype=torch.float32, device=self.config.device)
 
         T = self.config.num_steps
         for t_int in tqdm(range(T, 0, -1), leave=False, unit="step"):
-            # Time fraction for conditioning
-            t_frac = t_int / T
+            t_frac = t_int / T  # Normalize time step
 
-            # Get noise schedule values from the new polynomial schedule
-            alf_t = self.schedule["alpha"][t_int]
-            alf_s = self.schedule["alpha_L"][t_int]
-            bet_t = self.schedule["beta"][t_int]
-            sig_t = self.schedule["sigma"][t_int]
+            # Step 2: Retrieve noise schedule parameters
+            alf_t = self.schedule.alpha[t_int]
+            alf_s = self.schedule.alpha_L[t_int]  # Alpha at t-1
+            sig_t = self.schedule.sigma[t_int]  # Standard deviation
+            sig_t_sqr = self.schedule.sigma_squared[t_int]
+            sig_t_s = self.schedule.sigma[t_int - 1]  # Sigma at t-1
+            sig_t_s_sqr = self.schedule.sigma_squared[t_int - 1]
+            bet_t = self.schedule.beta[t_int]  # Beta at step t
 
-            # Sample new noise
-            new_eps_coords = demean @ torch.randn_like(coords)
-            new_eps_feats = torch.randn_like(feats)
+            # Step 3: Sample Gaussian noise ε_t
+            eps_coords = demean @ torch.randn_like(z_coords)
+            eps_features = torch.randn_like(z_features)
 
-            # Predict noise using EGNN
-            pred_eps_coords, pred_eps_feats = self.egnn(
-                n_nodes=num_atoms, coords=coords, features=feats, edges=edges, reduce=reduce, demean=demean, time_frac=t_frac
+            # Step 4: Predict noise ε̂ using EGNN
+            pred_eps_coords, pred_eps_features = self.egnn(
+                n_nodes=num_atoms, coords=z_coords, features=z_features, edges=edges, reduce=reduce, demean=demean, time_frac=t_frac
             )
 
-            # Get standard deviations at step t_int
-            std_coords = self.std_x(t_int)
-            std_feats = self.std_h(t_int)
+            # Step 5: Compute mean for the reverse step
+            mu_t_s_coords = (1 / alf_t) * z_coords - (sig_t_sqr / (alf_t * sig_t)) * pred_eps_coords
+            mu_t_s_feats = (1 / alf_t) * z_features - (sig_t_sqr / (alf_t * sig_t)) * pred_eps_features
 
-            # Reverse diffusion step
-            coords = (alf_s / alf_t) * coords - (alf_s / alf_t) * (bet_t / sig_t) * pred_eps_coords + std_coords * new_eps_coords
-            feats  = (alf_s / alf_t) * feats  - (alf_s / alf_t) * (bet_t / sig_t) * pred_eps_feats  + std_feats  * new_eps_feats
+            # Step 6: Apply reverse diffusion step
+            z_coords = mu_t_s_coords + sig_t_s * eps_coords
+            z_features = mu_t_s_feats + sig_t_s * eps_features
 
         # Final step: sample x | z(0)
-        alf_0 = self.schedule["alpha"][0]
-        sig_0 = self.schedule["sigma"][0]
+        alf_0 = self.schedule.alpha[0]
+        sig_0 = self.schedule.sigma[0]
 
-        new_eps_coords = demean @ torch.randn_like(coords)
-        new_eps_feats = torch.randn_like(feats)
+        final_eps_coords = demean @ torch.randn_like(z_coords)
+        final_eps_feats = torch.randn_like(z_features)
+
         pred_eps_coords, pred_eps_feats = self.egnn(
-            n_nodes=num_atoms, coords=coords, features=feats, edges=edges, reduce=reduce, demean=demean, time_frac=0.
+            n_nodes=num_atoms, coords=z_coords, features=z_features, edges=edges, reduce=reduce, demean=demean, time_frac=0.
         )
 
-        std_coords = self.std_x(0)
-        std_feats = self.std_h(0)
-
-        # Final sampling
-        coords = coords / alf_0 - (sig_0 / alf_0) * pred_eps_coords + std_coords * new_eps_coords
-        feats  = feats  / alf_0 - (sig_0 / alf_0) * pred_eps_feats  + std_feats  * new_eps_feats
+        # Final denoising step
+        z_coords = (1 / alf_0) * z_coords - (sig_0 / alf_0) * pred_eps_coords + sig_0 * final_eps_coords
+        z_features = (1 / alf_0) * z_features - (sig_0 / alf_0) * pred_eps_feats + sig_0 * final_eps_feats
 
         # Convert features back to original format
-        one_hot, charges = feats[:, :-1], feats[:, -1]
-        coords, one_hot, charges = self.unscale_inputs(coords, one_hot, charges)
+        one_hot, charges = z_features[:, :-1], z_features[:, -1]
+        coords, one_hot, charges = self.unscale_inputs(z_coords, one_hot, charges)
         one_hot, charges = one_hot.round().to(dtype=torch.long), charges.round().to(dtype=torch.long)
+
+        print("coord: ")
+        print(coords)
+        print("one_hot: ")
+        print(one_hot)
 
         return coords, one_hot, charges
