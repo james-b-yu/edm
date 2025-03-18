@@ -1,5 +1,5 @@
 import torch
-from model import EGNN,EGNNConfig  # Model
+from models.base import EGNN,EGNNConfig  # Model
 from data import EDMDataloaderItem  # For handling molecule data
 from utils.diffusion import cosine_noise_schedule, default_noise_schedule # For creating noise schedules
 import torch.nn.functional as F
@@ -39,7 +39,7 @@ class Sampler():
         # print(features)
 
         # Define molecular graph structure
-        n_nodes = torch.tensor([num_atoms], dtype=torch.int64, device=self.device)
+        n_nodes = torch.tensor([num_atoms], dtype=torch.long, device=self.device)
         edges = torch.cartesian_prod(torch.arange(num_atoms, device=self.device), torch.arange(num_atoms, device=self.device))
         
         # reduce_matrix
@@ -112,7 +112,7 @@ class Sampler():
         features[:num_atoms, :] = F.one_hot(torch.randint(0, 5, (num_atoms,)), num_classes=5).float().to(self.device)
 
         # Define molecular graph structure
-        n_nodes = torch.tensor([num_atoms], dtype=torch.int64, device=self.device)
+        n_nodes = torch.tensor([num_atoms], dtype=torch.long, device=self.device)
         edges = torch.cartesian_prod(torch.arange(max_n_nodes, device=self.device), torch.arange(max_n_nodes, device=self.device))
 
         # reduce_matrix

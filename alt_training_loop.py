@@ -6,7 +6,7 @@ import os
 import numpy as np
 import copy
 
-from model import EGNN, EGNNConfig
+from models.base import EGNN, EGNNConfig
 from data import QM9Dataset
 from noise_schedule import default_noise_schedule
 from utility import collate_fn, gradient_clipping, random_rotation

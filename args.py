@@ -1,5 +1,7 @@
 """This file gives the argparser.
 """
+from math import floor
+from multiprocessing import cpu_count
 import torch
 
 import argparse
@@ -15,22 +17,22 @@ Created by MLMI students David Gailey, Katherine Jackson, Stella Tsiapali and Ja
 )
 
 def _validate_args(args: argparse.Namespace):
-    if args.pipeline == "valid" and args.checkpoint is None:
-        raise argparse.ArgumentTypeError("--checkpoint must be set if --pipeline=='valid'")
+    if args.pipeline != "train" and args.checkpoint is None:
+        raise argparse.ArgumentTypeError("--checkpoint must be set if not training")
 
+parser.add_argument("--seed", default=42, type=int, help="set the random seed")
 parser.add_argument("--no-wandb", default=True, action="store_false", dest="use_wandb", help="specify if you do not want to use wandb (if not specified, we use wandb)")
 parser.add_argument("--wandb-project", default="MLMI4 EDM", type=str, help="wandb project name")
+parser.add_argument("--run-id", default=None, type=str, help="use specific wandb run id (e.g. when resuming)")
 
-
-parser.add_argument("--dataset", default="qm9", help="which dataset to train on, e.g. 'qm9', 'qm9_no_h'")
+parser.add_argument("--dataset", default="qm9", choices=["qm9", "qm9_no_h"], help="which dataset to train on")
 parser.add_argument("--noise-schedule", default="polynomial", type=str, help="which noising schedule to use", choices=["cosine", "polynomial"])
-parser.add_argument("--use-resid", default=False, action="store_true", help="specify egnn learns residual of residual")
 parser.add_argument("--tanh-range", default=15., type=float, help="if using tanh, what factor we should scale by after applying tanh")
 parser.add_argument("--num-steps", default=1000, type=int, help="number of diffusion steps")
 parser.add_argument("--batch-size", default=64, type=int, help="batch size")
 parser.add_argument("--lr", default=1e-5, type=float, help="learning rate")
 parser.add_argument("--no-clip_grad", default=True, action="store_false", dest="clip_grad", help="if specified, do not clip gradients (if not specified, we clip gradients)")
-parser.add_argument("--max_grad_norm", default=8., type=float, help="maximum gradient norm to tolerate")
+parser.add_argument("--max-grad-norm", default=8., type=float, help="maximum gradient norm to tolerate")
 parser.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu", type=str, help="torch device to use")
 
 parser.add_argument("--hidden-d", default=256, type=int, help="EGNN hidden dimension")
@@ -40,23 +42,30 @@ parser.add_argument("--run-name", default="edm_run", type=str, help="the name of
 parser.add_argument("--out-dir", default="./checkpoints", type=str, help="output will be contained in the folder <out_dir>/<run_name>/")
 
 parser.add_argument("--extension", default="vanilla", type=str, help="extension to use", choices=["vanilla", "variance"])
-parser.add_argument("--pipeline", default="train", type=str, help="pipeline", choices=["train", "valid", "test", "demo"])
-parser.add_argument("--checkpoint", default=None, type=str, help="if specified, load checkpoint located in this folder")
+parser.add_argument("--pipeline", default="train", type=str, help="pipeline", choices=["train", "valid", "test", "sample"])
+parser.add_argument("--checkpoint", default=None, type=str, help="if specified, load checkpoint for training located in this folder")
+
+parser.add_argument("--reruns", default=3, type=int, help="how many times to go through the valid/test datasets when estimating metrics for valid/test")
+parser.add_argument("--num-samples", default=100, type=int, help="how many sample to produce when estimating molecule stability metrics for valid/test")
+
 parser.add_argument("--no-restore-optim-state", default=True, action="store_false", dest="restore_optim_state", help="if specified, do not restore optim state from checkpoint (if not specified, then restores from optim.pth)")
 parser.add_argument("--no-restore-scheduler-state", default=True, action="store_false", dest="restore_scheduler_state", help="if specified, do not restore scheduler state from checkpoint (if not specified, then restores from scheduler.pth)")
 
+parser.add_argument("--ema-beta", default=0.999, type=float, help="beta factor to use when calculating ema_model: ema_model = beta * ema_model + (1 - beta) * current_model")
 parser.add_argument("--scheduler-factor", default=0.5, type=float, help="specify the amount by which the scheduler decreases the lr upon reaching a plateau")
 parser.add_argument("--scheduler-patience", default=10, type=int, help="specify how many epochs of non-improvement counts as a plateau")
-parser.add_argument("--scheduler-threshold", default=0.05, type=float, help="specify scheduler relative improvement threshold")
+parser.add_argument("--scheduler-threshold", default=0.01, type=float, help="specify scheduler relative improvement threshold")
 parser.add_argument("--scheduler-min-lr", default=5e-6, type=float, help="specify minimum learning rate for scheduler")
 
 parser.add_argument("--force-start-lr", default=None, type=float, help="if specified, force this learning rate upon checkpoint (no effect if not loading a checkpoint)")
+
+parser.add_argument("--dl-num-workers", default=0, type=int, help="set number of dataloader workers to use")
+parser.add_argument("--dl-prefetch-factor", default=None, type=int, help="dataloader prefetch factor")
 
 parser.add_argument("--start-epoch", default=0, type=int, help="train epochs in [start-epoch, end-epoch) -- note this is only for bookkeeping and does not affect which model is loaded")
 parser.add_argument("--end-epoch", default=1300, type=int, help="train epochs in [start-epoch, end-epoch)")
 
 parser.add_argument("--data-dir", default="./data", type=str, help="directory in which datasets are stored")
-parser.add_argument("--original-data-dir", default="./orig_data", type=str, help="directory in which original repo's datasets are stored")
 parser.add_argument("--qm9-data-url", default="https://springernature.figshare.com/ndownloader/files/3195389", type=str, help="url from which to retrieve the raw xyz.tar.bz2 dataset")
 parser.add_argument("--qm9-excluded-url", default="https://springernature.figshare.com/ndownloader/files/3195404", type=str, help="url from which to retrieve the excluded.txt file")
 parser.add_argument("--qm9-atomref-url", default="https://springernature.figshare.com/ndownloader/files/3195395", type=str, help="url from which to retrieve the atomref.txt file")
