@@ -141,7 +141,7 @@ class BaseEDM(nn.Module, ABC):
     def __init__(self, config: EDMConfig):
         super().__init__()
         self.config = config
-        self.schedule = cosine_beta_schedule(config.num_steps, config.device) if config.schedule_type == "cosine" else polynomial_schedule(config.num_steps, config.device)
+        self.schedule = polynomial_schedule(config.num_steps, config.device) # should be polynomial, we don't want to use cosine anymore
         self.egnn = EGNN(config)
         self.to(device=config.device)
         
