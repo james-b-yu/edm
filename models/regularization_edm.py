@@ -69,7 +69,7 @@ class RegularizationEDM(BaseEDM):
         avr_sq_dist = ((eps - pred_eps) ** 2).mean()
 
         post_coords, post_features = self.subtract_predicted(z_coords, z_features, pred_eps_coords, pred_eps_features, t_nodes_int)
-        disc_penalty = get_disconnected_penalty(post_coords, post_features)
+        disc_penalty = get_disconnected_penalty(post_coords, post_features, self.config.dataset_name, self.config.use_h)
 
         train_loss = avr_sq_dist + disc_penalty
 
