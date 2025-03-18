@@ -25,7 +25,7 @@ def get_bond_order(atom_1, atom_2, distance, check_exists=False):
     return 0, threshold_1 - distance                    # No bond
 
 
-def geom_predictor(p, l, margin1=5, limit_bonds_to_one=False):
+def geom_predictor(p, l, limit_bonds_to_one=False):
     """ p: atom pair (couple of str)
         l: bond length (float)"""
     bond_order = get_bond_order(p[0], p[1], l, check_exists=True)
