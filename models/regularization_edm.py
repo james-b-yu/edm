@@ -22,8 +22,9 @@ class RegularizationEDM(BaseEDM):
 
     def subtract_predicted(self, in_coords, in_features, pred_eps_coords, pred_eps_features, t_nodes_int):
         # Get noise schedule values
-        alpha_t = torch.clamp(self.schedule.alpha[t_nodes_int], min=1e-5)
-        sigma_t = torch.clamp(self.schedule.sigma[t_nodes_int], min=1e-5)
+        min_eps = 1e-5  # Small constant to prevent division by very small numbers
+        alpha_t = torch.clamp(self.schedule.alpha[t_nodes_int], min=min_eps)
+        sigma_t = torch.clamp(self.schedule.sigma[t_nodes_int], min=min_eps)
 
         # Generate random noise and enforce zero center of gravity
         epsilon_x = torch.randn_like(in_coords)
