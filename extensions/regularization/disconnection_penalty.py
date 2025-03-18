@@ -38,7 +38,7 @@ def find_graph_components(A):
     return components
 
 
-def get_disconnected_penalty(batch_coords, batch_features, dataset_name='qm9', use_h=True):
+def get_disconnection_penalty(batch_coords, batch_features, dataset_name='qm9', use_h=True):
     batch_penalties = torch.zeros((batch_coords.shape[0],))
     dataset_info = get_dataset_info(dataset_name, use_h)
     num_types = len(dataset_info['atom_types'])
@@ -59,4 +59,4 @@ def get_disconnected_penalty(batch_coords, batch_features, dataset_name='qm9', u
                 penalty += distances[v, u]
         batch_penalties[i] = penalty
 
-    return torch.mean(batch_penalties ** 2)
+    return batch_penalties

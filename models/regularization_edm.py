@@ -10,7 +10,7 @@ from configs.model_config import EDMConfig
 from models.base import BaseEDM
 from utils.diffusion import cdf_standard_gaussian
 
-from extensions.regularization.penalty import get_disconnected_penalty
+from extensions.regularization.disconnection_penalty import get_disconnection_penalty
 
 class RegularizationEDM(BaseEDM):
     """Regularization EDM (penalty for disconnected molecules)
@@ -69,9 +69,10 @@ class RegularizationEDM(BaseEDM):
         avr_sq_dist = ((eps - pred_eps) ** 2).mean()
 
         post_coords, post_features = self.subtract_predicted(z_coords, z_features, pred_eps_coords, pred_eps_features, t_nodes_int)
-        disc_penalty = get_disconnected_penalty(post_coords, post_features, self.config.dataset_name, self.config.use_h)
+        disc_penalty = get_disconnection_penalty(post_coords, post_features, self.config.dataset_name, self.config.use_h)
+        avr_sq_disc_penalty = (disc_penalty ** 2).mean()
 
-        train_loss = avr_sq_dist + disc_penalty
+        train_loss = avr_sq_dist + avr_sq_disc_penalty
 
         if train_loss.isnan():
             warn("Encountered NAN loss.")
