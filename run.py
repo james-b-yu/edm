@@ -50,6 +50,10 @@ if __name__ == "__main__":
     else:
         raise NotImplementedError
     
+    # just for KJ
+    # if args.device == 'cuda' and not torch.cuda.is_available():
+    #     args.device = 'mps'
+    
     assert hasattr(dataloaders["train"].dataset, "num_atom_types")
     model = Model(get_config_from_args(args, dataloaders["train"].dataset.num_atom_types))  # type: ignore
     
@@ -143,8 +147,12 @@ if __name__ == "__main__":
 
             node_mask = torch.ones(len(samples[s][0]), dtype=torch.bool, device=args.device)  # Shape: [num_atoms]
 
+            if args.dataset == 'qm9':
+                remove_h = False
+            elif args.dataset == 'qm9_no_h':
+                remove_h = True
             
-            dataset_info = get_dataset_info()
+            dataset_info = get_dataset_info(remove_h)
             
             # Ensure inputs are in the correct format
             one_hot = one_hot.unsqueeze(0)  # Add batch dimension
@@ -154,11 +162,9 @@ if __name__ == "__main__":
             
             atom_stability = compute_atom_stability(one_hot, charges, coords, node_mask, dataset_info)
             number_atoms_stable += atom_stability.sum().item()
+            if number_atoms_stable == len(samples[s][0]):
+                number_molecules_stable += 1
             print(f"number_atoms_stable: {number_atoms_stable}")
-            
-            
-            mol_stab = compute_molecule_stability(one_hot, charges, coords, node_mask)
-            number_molecules_stable += mol_stab[0]
 
         percentage_atoms_stable = (number_atoms_stable / number_atoms) * 100
         percentage_molecules_stable = (number_molecules_stable / num_molecules) * 100

@@ -134,11 +134,11 @@ geom_no_h = {
     'with_h': False}
 
 
-def get_dataset_info():
-    # if dataset_name == 'qm9':
-    #     if not remove_h:
-    #         print("correct")
-    return qm9_with_h
+def get_dataset_info(remove_h: bool):
+    if not remove_h:
+        return qm9_with_h
+    else:
+        return qm9_without_h
     #     else:
     #         return qm9_without_h
     # elif dataset_name == 'geom':

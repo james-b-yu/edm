@@ -29,15 +29,20 @@ def remove_mean_with_mask(coords, node_mask):
 
     return centered_coords
 
-def remove_mean(coords, number_atoms_in_molecule):
+def remove_mean(coords):
     """Centers molecular coordinates by subtracting the mean."""
-    num_valid = number_atoms_in_molecule
-    mean = coords.sum(dim=1, keepdim=True) / (num_valid + 1e-8)  # Avoid division by zero
-
-    # Subtract the mean only from valid atoms
-    centered_coords = coords - mean
-
+    mean = coords.mean(dim=1, keepdim=True)  # Compute mean along the correct dimension
+    centered_coords = coords - mean  # Subtract mean from all atoms
     return centered_coords
+
+def normalize_coords(coords):
+    """Centers molecular coordinates and ensures unit-scale."""
+    mean = coords.mean(dim=1, keepdim=True)  # Compute mean
+    std = coords.std(dim=1, keepdim=True) + 1e-8  # Compute std and prevent divide-by-zero
+    normalized_coords = (coords - mean) / std  # Apply both centering and scaling
+    return normalized_coords
+
+
 
 def compute_atom_stability(one_hot, charges, coords, node_mask, dataset_info):
     """
@@ -48,14 +53,14 @@ def compute_atom_stability(one_hot, charges, coords, node_mask, dataset_info):
         charges (torch.Tensor): Atomic charges [batch, num_atoms, 1].
         coords (torch.Tensor): Atomic 3D coordinates [batch, num_atoms, 3].
         node_mask (torch.Tensor): Mask indicating valid atoms [batch, num_atoms].
-        dataset_info (dict): Dataset configuration info.
+        dataset_info (dict): Dataset configuration info, input True/False for removing H (ie True = remove H, False = with H)
 
     Returns:
         torch.Tensor: Boolean tensor [batch, num_atoms] indicating whether each atom is stable.
     """
-    
-    coords = remove_mean(coords, len(charges)) # ensure means are removed (coords already be centred)
-
+    print(f"coords before normalization: {coords}")
+    coords = normalize_coords(coords)  # Ensure coordinates are normalized
+    print(f"coords after normalization: {coords}")
 
     batch_size, num_atoms, num_atom_classes = one_hot.shape
     atom_decoder = dataset_info['atom_decoder']
@@ -80,35 +85,34 @@ def compute_atom_stability(one_hot, charges, coords, node_mask, dataset_info):
         positions = positions[valid_atoms]
         atom_types_b = atom_types_b[valid_atoms]
         nr_bonds = np.zeros(len(positions), dtype=int)  # Reset per molecule
+        
+        x = positions[:, 0]
+        y = positions[:, 1]
+        z = positions[:, 2]
 
-        # Prevent double counting
-        unique_bonds = {}
+        print(f"positions: {positions}")
+        print(f"atom_types_b: {atom_types_b}")
 
         for i in range(len(positions)):
             for j in range(i + 1, len(positions)):
-                bond = tuple(sorted([i, j]))  # Sort indices to ensure no duplicates
-
-                if bond in unique_bonds:
-                    continue  # Already counted this bond, skip
-
-                unique_bonds[bond] = True  # Mark bond as counted
-
-                dist = np.linalg.norm(positions[i] - positions[j])
-
+                p1 = np.array([x[i], y[i], z[i]])
+                p2 = np.array([x[j], y[j], z[j]])
+                dist = np.sqrt(np.sum((p1 - p2) ** 2))
                 atom1, atom2 = atom_decoder[atom_types_b[i]], atom_decoder[atom_types_b[j]]
 
-                if dataset_info['name'] == 'qm9':
-                    order = bond_analyze.get_bond_order(atom1, atom2, dist)
-                
-                nr_bonds[i] = min(nr_bonds[i] + order, 4)  # Limit max bonds to 4 per atom as that is the max possible value for highest val atom type
-                nr_bonds[j] = min(nr_bonds[j] + order, 4)
+                order = bond_analyze.get_bond_order(atom1, atom2, dist)
 
-        # Fixing stability comparison
+                nr_bonds[i] += order
+                nr_bonds[j] += order
+
+                print(f"Updated bonds: Atom {i} ({atom1}) = {nr_bonds[i]}, Atom {j} ({atom2}) = {nr_bonds[j]}")
+
         stable_atoms = []
         for i in range(len(atom_types_b)):
             possible_bonds = bond_analyze.allowed_bonds.get(atom_decoder[atom_types_b[i]], [])
 
-            predicted_bonds = nr_bonds[i]  # No longer clamping predicted bonds
+            predicted_bonds = nr_bonds[i]
+            print(f"predicting: {predicted_bonds} and expecting: {possible_bonds}")
 
             if isinstance(possible_bonds, list):
                 is_stable = predicted_bonds in possible_bonds
@@ -121,7 +125,7 @@ def compute_atom_stability(one_hot, charges, coords, node_mask, dataset_info):
 
     return torch.nn.utils.rnn.pad_sequence(stability_results, batch_first=True, padding_value=False) 
 
-def compute_molecule_stability(one_hot, charges, coords, node_mask):
+def compute_molecule_stability(one_hot, charges, coords, node_mask, dataset_info):
     """
     Computes molecule stability based on atomic stability.
 
@@ -139,7 +143,7 @@ def compute_molecule_stability(one_hot, charges, coords, node_mask):
     batch_size = one_hot.shape[0]  # Number of molecules in batch
 
     # Compute atomic stability
-    is_stable_atoms = compute_atom_stability(one_hot, charges, coords, node_mask, get_dataset_info())
+    is_stable_atoms = compute_atom_stability(one_hot, charges, coords, node_mask, dataset_info)
 
     # Get the number of nodes per molecule from the node_mask.
     n_nodes_per_molecule = node_mask.sum(dim=1).long()
@@ -171,14 +175,6 @@ def polynomial_schedule_just_sigma(timesteps: int, device: torch.device|str, pow
         alphas2 = np.clip(alphas2, a_min=clip_value, a_max=1.)
         alphas2 = alphas2 / alphas2[0]
         return alphas2
-
-    alphas2 = clip_noise_schedule(alphas2, clip_value=0.001)
-
-    precision = 1 - 2 * s
-
-    alphas2 = precision * alphas2 + s
-
-    return {"sigma": torch.from_numpy(((1. - alphas2) ** 0.5).astype(np.float32)).to(device=device)}
 
 
 def run_eval(args: Namespace, dl: DataLoader):
