@@ -58,8 +58,9 @@ def compute_atom_stability(one_hot, charges, coords, node_mask, dataset_info):
     Returns:
         torch.Tensor: Boolean tensor [batch, num_atoms] indicating whether each atom is stable.
     """
+    
     print(f"coords before normalization: {coords}")
-    coords = normalize_coords(coords)  # Ensure coordinates are normalized
+    coords = normalize_coords(coords)
     print(f"coords after normalization: {coords}")
 
     batch_size, num_atoms, num_atom_classes = one_hot.shape
@@ -85,19 +86,15 @@ def compute_atom_stability(one_hot, charges, coords, node_mask, dataset_info):
         positions = positions[valid_atoms]
         atom_types_b = atom_types_b[valid_atoms]
         nr_bonds = np.zeros(len(positions), dtype=int)  # Reset per molecule
-        
-        x = positions[:, 0]
-        y = positions[:, 1]
-        z = positions[:, 2]
 
         print(f"positions: {positions}")
         print(f"atom_types_b: {atom_types_b}")
 
         for i in range(len(positions)):
             for j in range(i + 1, len(positions)):
-                p1 = np.array([x[i], y[i], z[i]])
-                p2 = np.array([x[j], y[j], z[j]])
-                dist = np.sqrt(np.sum((p1 - p2) ** 2))
+                p1 = positions[i]
+                p2 = positions[j]
+                dist = np.linalg.norm(p1 - p2)
                 atom1, atom2 = atom_decoder[atom_types_b[i]], atom_decoder[atom_types_b[j]]
 
                 order = bond_analyze.get_bond_order(atom1, atom2, dist)
@@ -105,23 +102,30 @@ def compute_atom_stability(one_hot, charges, coords, node_mask, dataset_info):
                 nr_bonds[i] += order
                 nr_bonds[j] += order
 
-                print(f"Updated bonds: Atom {i} ({atom1}) = {nr_bonds[i]}, Atom {j} ({atom2}) = {nr_bonds[j]}")
+                # print(f"Distance between atom {i} and atom {j}: {dist}")
+                # print(f"Bond: {atom1}-{atom2}, Distance: {dist:.3f}, Order: {order}")
+                # print(f"Updated bonds: Atom {i} ({atom1}) = {nr_bonds[i]}, Atom {j} ({atom2}) = {nr_bonds[j]}")
 
-        stable_atoms = []
-        for i in range(len(atom_types_b)):
-            possible_bonds = bond_analyze.allowed_bonds.get(atom_decoder[atom_types_b[i]], [])
+        nr_stable_bonds = 0
+        for atom_type_i, nr_bonds_i in zip(atom_types_b, nr_bonds):
+            possible_bonds = bond_analyze.allowed_bonds[atom_decoder[atom_type_i]]
 
-            predicted_bonds = nr_bonds[i]
-            print(f"predicting: {predicted_bonds} and expecting: {possible_bonds}")
+            
+            if len(atom_decoder) == 5:
+                is_stable = possible_bonds == nr_bonds_i
+                print(f"with H: {is_stable}")
+            elif len(atom_decoder) == 4:
+                # For QM9 without H, we allow the rest can be filled with H bonds
+                
+                print(f"possible bonds: {possible_bonds}")
+                print(f"nr_bonds_i: {nr_bonds_i}")
+                is_stable = possible_bonds >= nr_bonds_i
+                print(f"without H: {is_stable}")
 
-            if isinstance(possible_bonds, list):
-                is_stable = predicted_bonds in possible_bonds
-            else:
-                is_stable = predicted_bonds == possible_bonds
+            nr_stable_bonds += int(is_stable)
 
-            stable_atoms.append(is_stable)
-
-        stability_results.append(torch.tensor(stable_atoms, dtype=torch.bool, device=one_hot.device))
+        molecule_stable = nr_stable_bonds == len(positions) # molecule stable if all atoms are stable
+        stability_results.append(torch.tensor([molecule_stable] * len(positions), dtype=torch.bool, device=one_hot.device))
 
     return torch.nn.utils.rnn.pad_sequence(stability_results, batch_first=True, padding_value=False) 
 
