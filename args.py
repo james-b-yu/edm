@@ -41,7 +41,7 @@ parser.add_argument("--num-layers", default=9, type=int, help="EGNN layers")
 parser.add_argument("--run-name", default="edm_run", type=str, help="the name of the run")
 parser.add_argument("--out-dir", default="./checkpoints", type=str, help="output will be contained in the folder <out_dir>/<run_name>/")
 
-parser.add_argument("--extension", default="vanilla", type=str, help="extension to use", choices=["vanilla", "variance"])
+parser.add_argument("--extension", default="vanilla", type=str, help="extension to use", choices=["vanilla", "variance", "regularization"])
 parser.add_argument("--pipeline", default="train", type=str, help="pipeline", choices=["train", "valid", "test", "sample"])
 parser.add_argument("--checkpoint", default=None, type=str, help="if specified, load checkpoint for training located in this folder")
 
