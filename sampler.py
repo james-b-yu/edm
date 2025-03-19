@@ -62,8 +62,9 @@ class Sampler():
             predicted_coords, predicted_features = self.model(n_nodes, coords, features, edges, reduce_matrix, demean_matrix, time_tensor)
 
             # Get noise schedule values
-            alpha_t = torch.clamp(self.noise_schedule["alpha"][t], min=1e-5)
-            sigma_t = torch.clamp(self.noise_schedule["sigma"][t], min=1e-5)
+            min_eps = 1e-5  # Small constant to prevent division by very small numbers
+            alpha_t = torch.clamp(self.noise_schedule["alpha"][t], min=min_eps)
+            sigma_t = torch.clamp(self.noise_schedule["sigma"][t], min=min_eps)
 
             # Generate random noise and enforce zero center of gravity
             epsilon_x = torch.randn_like(coords)
@@ -71,8 +72,6 @@ class Sampler():
             epsilon_h = torch.randn_like(features)
             
             # Apply reverse diffusion update
-
-            eps = 1e-7  # Small constant to prevent division by very small numbers
             coords = (1 / (alpha_t)) * (coords - sigma_t * predicted_coords) + sigma_t * epsilon_x
             features = (1 / (alpha_t)) * (features - sigma_t * predicted_features) + sigma_t * epsilon_h
             features = F.one_hot(features.argmax(dim=-1), num_classes=5).float()
@@ -175,7 +174,7 @@ dummy_config = EGNNConfig(
     features_d=5,      # Number of atom types
     node_attr_d=0,     # Additional attributes per node
     edge_attr_d=0,     # Additional attributes per edge
-    hidden_d=256,       # Hidden layer size
+    hidden_d=256,      # Hidden layer size
     num_layers=9       # Number of EGNN layers
 )
 

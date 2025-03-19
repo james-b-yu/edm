@@ -15,6 +15,7 @@ from models.base import BaseEDM
 from models.edm import EDM
 from extensions.vanilla.full_eval import compute_atom_stability, compute_molecule_stability
 from configs.datasets_config import get_dataset_info
+from models.regularization_edm import RegularizationEDM
 
 from os import path
 import pickle
@@ -44,6 +45,8 @@ if __name__ == "__main__":
         Model = EDM
     elif args.extension == "variance":
         Model = VarianceEDM
+    elif args.extension == "regularization":
+        Model = RegularizationEDM
     else:
         raise NotImplementedError
     

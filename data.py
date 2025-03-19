@@ -112,6 +112,7 @@ QM9Attributes = Literal["index", "A", "B", "C", "mu", "alpha", "homo", "lumo", "
 QM9ProcessedData = dict[Literal["num_atoms", "classes", "charges", "positions", "one_hot", QM9Attributes], torch.Tensor]
 
 class EDMDataset(ABC, td.Dataset):
+
     def __init__(self, num_atom_types, max_nodes, atom_types, size_histogram):
         """initialise EDM dataset
 

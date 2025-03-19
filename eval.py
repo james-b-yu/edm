@@ -32,7 +32,9 @@ def load_model(checkpoint_path, args_path):
         edge_attr_d=args.get("edge_attr_d", 0),
         use_tanh=args.get("use_tanh", True),
         tanh_range=args.get("tanh_range", 15.0),
-        use_resid=args.get("use_resid", False)
+        use_resid=args.get("use_resid", False),
+        dataset_name=args.get("dataset", "qm9").split('_')[0],
+        use_h=("_no_h" not in args.get("dataset", "qm9"))
     )
     
     model = EGNN(config)
