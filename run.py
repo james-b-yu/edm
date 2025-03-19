@@ -13,11 +13,12 @@ from configs.model_config import get_config_from_args
 from models.variance_edm import VarianceEDM
 from models.base import BaseEDM
 from models.edm import EDM
+from extensions.vanilla.full_eval import compute_atom_stability, compute_molecule_stability
+from configs.datasets_config import get_dataset_info
 
 from os import path
 import pickle
 import wandb
-# from eval import compute_nll, get_test_dataloader
 
 from args import args, parser
 
@@ -53,6 +54,9 @@ if __name__ == "__main__":
         print(f"Loading model checkpoint located in {args.checkpoint}")
         model.load_state_dict(torch.load(path.join(args.checkpoint, "model.pth"), map_location=args.device))  # always load the model as checkpoint
         
+        # just for KJ as on a Mac and cannot load CUDA checkpoints directly
+        # map_location = torch.device("mps") if torch.backends.mps.is_available() else torch.device("cpu")
+        # model.load_state_dict(torch.load(path.join(args.checkpoint, "model.pth"), map_location=map_location))
     if args.pipeline == "train":
         model_ema = Model(get_config_from_args(args, dataloaders["train"].dataset.num_atom_types))  # type: ignore
         model_ema.load_state_dict(model.state_dict())  # initialise the ema model to be the same as the model
@@ -114,9 +118,50 @@ if __name__ == "__main__":
         mol_size_probs = torch.tensor(list(DATASET_INFO[args.dataset]["molecule_size_histogram"].values()), dtype=torch.float, device=args.device)
         print(f"Sampling from 'model.pth'")
         samples = model.sample(num_molecules, batch_size, mol_sizes, mol_size_probs)
+        number_molecules_stable = 0
+        number_atoms_stable = 0
+        number_atoms = 0
         
-        # TODO: write these samples to disk as .xyz files
-        # TODO: calculate stability metrics on the generated samples
+        for s in range(len(samples)):
+            print(f"molecule {s+1} has {len(samples[s][0])} atoms")
+            number_atoms += len(samples[s][0])
+            # xyz coords of each atom
+            
+            # print(f"xyz coords: {samples[0][0]}")
+            coords = torch.tensor(samples[s][0], device=args.device)
+        
+            # one hot encoding of atom type H, C, O, N, F
+            # print(f"one hot encoding of atoms: {samples[0][1]}")
+            one_hot = torch.tensor(samples[s][1], device=args.device)
+        
+            # predicted valencies of each atom
+            # print(f"charges: {samples[0][2]}")
+            charges = torch.tensor(samples[s][2], device=args.device)
+
+            node_mask = torch.ones(len(samples[s][0]), dtype=torch.bool, device=args.device)  # Shape: [num_atoms]
+
+            
+            dataset_info = get_dataset_info()
+            
+            # Ensure inputs are in the correct format
+            one_hot = one_hot.unsqueeze(0)  # Add batch dimension
+            charges = charges.unsqueeze(0).unsqueeze(-1)  # Add batch and last dimension
+            coords = coords.unsqueeze(0)  # Add batch dimension
+            node_mask = node_mask.unsqueeze(0)  # Add batch dimension
+            
+            atom_stability = compute_atom_stability(one_hot, charges, coords, node_mask, dataset_info)
+            number_atoms_stable += atom_stability.sum().item()
+            print(f"number_atoms_stable: {number_atoms_stable}")
+            
+            
+            mol_stab = compute_molecule_stability(one_hot, charges, coords, node_mask)
+            number_molecules_stable += mol_stab[0]
+
+        percentage_atoms_stable = (number_atoms_stable / number_atoms) * 100
+        percentage_molecules_stable = (number_molecules_stable / num_molecules) * 100
+        print(f"percentage_atoms_stable: {percentage_atoms_stable:.2f} %")
+        print(f"percentage_molecules_stable: {percentage_molecules_stable:.2f} %")
+        
         pass
     else:
         raise NotImplementedError

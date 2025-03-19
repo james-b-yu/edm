@@ -7,8 +7,6 @@ import torch.nn.functional as F
 import numpy as np
 from rdkit import Chem
 from rdkit.Chem import AllChem
-from masked_model import MaskedEDM, get_config_from_args
-from losses import compute_loss_and_nll
 from qm9 import bond_analyze
 from configs.datasets_config import get_dataset_info
 import pickle
@@ -31,6 +29,16 @@ def remove_mean_with_mask(coords, node_mask):
 
     return centered_coords
 
+def remove_mean(coords, number_atoms_in_molecule):
+    """Centers molecular coordinates by subtracting the mean."""
+    num_valid = number_atoms_in_molecule
+    mean = coords.sum(dim=1, keepdim=True) / (num_valid + 1e-8)  # Avoid division by zero
+
+    # Subtract the mean only from valid atoms
+    centered_coords = coords - mean
+
+    return centered_coords
+
 def compute_atom_stability(one_hot, charges, coords, node_mask, dataset_info):
     """
     Computes atomic stability based on inferred bonds using RDKit + empirical distance-based bond rules.
@@ -46,7 +54,8 @@ def compute_atom_stability(one_hot, charges, coords, node_mask, dataset_info):
         torch.Tensor: Boolean tensor [batch, num_atoms] indicating whether each atom is stable.
     """
     
-    coords = remove_mean_with_mask(coords, node_mask)
+    coords = remove_mean(coords, len(charges)) # ensure means are removed (coords already be centred)
+
 
     batch_size, num_atoms, num_atom_classes = one_hot.shape
     atom_decoder = dataset_info['atom_decoder']
@@ -60,11 +69,10 @@ def compute_atom_stability(one_hot, charges, coords, node_mask, dataset_info):
 
     for b in range(batch_size):
         atom_types = atom_types_batch[b]
-        # print(atom_types)
         charges = charges_batch[b]
         coords = coords_batch[b]
 
-        valid_mask = node_mask_batch[b].squeeze(-1).astype(bool)  # Convert mask to boolean
+        valid_mask = node_mask_batch[b].astype(bool)  # Convert mask to boolean
         positions = coords[valid_mask]  
         atom_types_b = atom_types[valid_mask]  
 
@@ -92,37 +100,26 @@ def compute_atom_stability(one_hot, charges, coords, node_mask, dataset_info):
                 if dataset_info['name'] == 'qm9':
                     order = bond_analyze.get_bond_order(atom1, atom2, dist)
                 
-                # print(f"Bond: {atom1}-{atom2}, Distance: {dist:.3f}, Order: {order}")
                 nr_bonds[i] = min(nr_bonds[i] + order, 4)  # Limit max bonds to 4 per atom as that is the max possible value for highest val atom type
                 nr_bonds[j] = min(nr_bonds[j] + order, 4)
-
-                # print(f"Updated bonds: Atom {i} ({atom1}) = {nr_bonds[i]}, Atom {j} ({atom2}) = {nr_bonds[j]}")
 
         # Fixing stability comparison
         stable_atoms = []
         for i in range(len(atom_types_b)):
             possible_bonds = bond_analyze.allowed_bonds.get(atom_decoder[atom_types_b[i]], [])
 
-            # print(f'Atom type: {atom_types_b[i]}, Possible bonds: {possible_bonds}')
-
             predicted_bonds = nr_bonds[i]  # No longer clamping predicted bonds
-
-            # print(f"Predicted bonds: {predicted_bonds}")
 
             if isinstance(possible_bonds, list):
                 is_stable = predicted_bonds in possible_bonds
             else:
                 is_stable = predicted_bonds == possible_bonds
-                
-                
-            # print("Final bond count per atom:", nr_bonds)
-
 
             stable_atoms.append(is_stable)
 
         stability_results.append(torch.tensor(stable_atoms, dtype=torch.bool, device=one_hot.device))
 
-    return torch.nn.utils.rnn.pad_sequence(stability_results, batch_first=True, padding_value=False)
+    return torch.nn.utils.rnn.pad_sequence(stability_results, batch_first=True, padding_value=False) 
 
 def compute_molecule_stability(one_hot, charges, coords, node_mask):
     """
@@ -185,7 +182,7 @@ def polynomial_schedule_just_sigma(timesteps: int, device: torch.device|str, pow
 
 
 def run_eval(args: Namespace, dl: DataLoader):
-    print("This calculates the NLL, Atom stability and Molecule Stability against the test data.")
+    print("This calculates the Atom stability and Molecule Stability against the test data.")
     nlls = []
     total_stable_atoms = 0
     total_stable_molecules = 0
@@ -252,10 +249,9 @@ def run_eval(args: Namespace, dl: DataLoader):
         ######################
         
         batch_stability = compute_atom_stability(data['one_hot'], data['charges'], pred_eps_coord, data['node_mask'], get_dataset_info())
-        # print(f"batch stab: {batch_stability}")
+
         # Count number of True values across all tensors
         batch_num_stable_atoms = sum(tensor.sum().item() for tensor in batch_stability)
-        # print(f"number of stable atoms: {batch_num_stable_atoms}")
         total_stable_atoms += batch_num_stable_atoms
         total_atoms += batch_stability.numel()  # Correctly count total atoms
 

@@ -5,7 +5,6 @@ import wandb.wandb_run
 from torch.utils.data import DataLoader
 from wandb.wandb_run import Run
 
-from .demo import do_demo
 from .full_eval import run_eval
 
 def run(args: Namespace, dataloaders: dict[str, DataLoader], wandb_run: None|Run):

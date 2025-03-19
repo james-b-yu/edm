@@ -12,7 +12,7 @@ To calculate an estimate of NLL on the pretrained weights using the test set, ru
 ```
 python run.py --pipeline=test --seed=42 --reruns=5 --checkpoint=./pretrained/<model-name>
 ```
-where `<model-name>` is any one of `'vanilla-with-h'`, `'vanilla-without-h'`, `'variance-with-h'` or `'variance-without-h'`
+where `<model-name>` is any one of `'vanilla_with_h'`, `'vanilla_without_h'`, `'variance_with_h'` or `'variance_without_h'`
 
 The following table summarises the result of running this command:
 |**Estimate of NLL**|No extensions (vanilla)|Learning variance|
@@ -31,7 +31,7 @@ To sample from pretrained models, use the following command.
 ```
 python run.py --pipeline=sample --seed=42 --num-samples=<num-samples> --checkpoint=./pretrained/<model-name>
 ```
-where `<num-samples>` is the number of samples to create, e.g. 1000 and `<model-name>` is any one of `'vanilla-with-h'`, `'vanilla-without-h'`, `'variance-with-h'` or `'variance-without-h'`.
+where `<num-samples>` is the number of samples to create, e.g. 1000 and `<model-name>` is any one of `'vanilla_with_h'`, `'vanilla_without_h'`, `'variance_with_h'` or `'variance_without_h'`.
 
 # Training the model
 To train a model from scratch, run:
