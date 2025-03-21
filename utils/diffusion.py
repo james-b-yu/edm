@@ -21,24 +21,24 @@ def default_noise_schedule(num_steps: int, device: torch.device|str):
         
         return {"alpha": alpha_t, "sigma": sigma_t}
 
-def polynomial_noise_schedule(T=1000, s=1e-5):
-    """
-    Implements the polynomial noise schedule from the paper.
+# def polynomial_noise_schedule(T=1000, s=1e-5):
+#     """
+#     Implements the polynomial noise schedule from the paper.
     
-    Parameters:
-        T (int): Total number of diffusion steps.
-        s (float): Small positive value to avoid numerical instabilities.
+#     Parameters:
+#         T (int): Total number of diffusion steps.
+#         s (float): Small positive value to avoid numerical instabilities.
     
-    Returns:
-        alpha_t (np.array): Alpha values controlling the signal retention.
-        sigma_t (np.array): Sigma values controlling noise level.
-    """
-    t = np.arange(T + 1) / T  # Normalize time steps
-    f_t = 1 - t**2  # Quadratic polynomial function
-    alpha_t = (1 - 2 * s) * f_t + s  # Noise schedule
-    sigma_t = np.sqrt(1 - alpha_t**2)  # Compute sigma
+#     Returns:
+#         alpha_t (np.array): Alpha values controlling the signal retention.
+#         sigma_t (np.array): Sigma values controlling noise level.
+#     """
+#     t = np.arange(T + 1) / T  # Normalize time steps
+#     f_t = 1 - t**2  # Quadratic polynomial function
+#     alpha_t = (1 - 2 * s) * f_t + s  # Noise schedule
+#     sigma_t = np.sqrt(1 - alpha_t**2)  # Compute sigma
     
-    return alpha_t, sigma_t
+#     return alpha_t, sigma_t
     
 def clip_noise_schedule(alphas2, clip_value=0.001):
     """

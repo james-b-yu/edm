@@ -59,7 +59,7 @@ if __name__ == "__main__":
     
     if args.checkpoint is not None:                    
         print(f"Loading model checkpoint located in {args.checkpoint}")
-        model.load_state_dict(torch.load(path.join(args.checkpoint, "model.pth"), map_location=args.device))  # always load the model as checkpoint
+        model.load_state_dict(torch.load(path.join(args.checkpoint, "model.pth"), map_location=args.device),strict=False)  # always load the model as checkpoint
         
         # just for KJ as on a Mac and cannot load CUDA checkpoints directly
         # map_location = torch.device("mps") if torch.backends.mps.is_available() else torch.device("cpu")
@@ -125,53 +125,53 @@ if __name__ == "__main__":
         mol_size_probs = torch.tensor(list(DATASET_INFO[args.dataset]["molecule_size_histogram"].values()), dtype=torch.float, device=args.device)
         print(f"Sampling from 'model.pth'")
         samples = model.sample(num_molecules, batch_size, mol_sizes, mol_size_probs)
-        number_molecules_stable = 0
-        number_atoms_stable = 0
-        number_atoms = 0
+        # number_molecules_stable = 0
+        # number_atoms_stable = 0
+        # number_atoms = 0
         
-        for s in range(len(samples)):
-            print(f"molecule {s+1} has {len(samples[s][0])} atoms")
-            number_atoms += len(samples[s][0])
-            # xyz coords of each atom
+        # for s in range(len(samples)):
+        #     print(f"molecule {s+1} has {len(samples[s][0])} atoms")
+        #     number_atoms += len(samples[s][0])
+        #     # xyz coords of each atom
             
-            # print(f"xyz coords: {samples[0][0]}")
-            coords = torch.tensor(samples[s][0], device=args.device)
+        #     # print(f"xyz coords: {samples[0][0]}")
+        #     coords = torch.tensor(samples[s][0], device=args.device)
         
-            # one hot encoding of atom type H, C, O, N, F
-            # print(f"one hot encoding of atoms: {samples[0][1]}")
-            one_hot = torch.tensor(samples[s][1], device=args.device)
+        #     # one hot encoding of atom type H, C, O, N, F
+        #     # print(f"one hot encoding of atoms: {samples[0][1]}")
+        #     one_hot = torch.tensor(samples[s][1], device=args.device)
         
-            # predicted valencies of each atom
-            # print(f"charges: {samples[0][2]}")
-            charges = torch.tensor(samples[s][2], device=args.device)
+        #     # predicted valencies of each atom
+        #     # print(f"charges: {samples[0][2]}")
+        #     charges = torch.tensor(samples[s][2], device=args.device)
 
-            node_mask = torch.ones(len(samples[s][0]), dtype=torch.bool, device=args.device)  # Shape: [num_atoms]
+        #     node_mask = torch.ones(len(samples[s][0]), dtype=torch.bool, device=args.device)  # Shape: [num_atoms]
 
-            if args.dataset == 'qm9':
-                remove_h = False
-            elif args.dataset == 'qm9_no_h':
-                remove_h = True
+        #     if args.dataset == 'qm9':
+        #         remove_h = False
+        #     elif args.dataset == 'qm9_no_h':
+        #         remove_h = True
             
-            dataset_info = get_dataset_info(remove_h)
+        #     dataset_info = get_dataset_info(remove_h)
             
-            # Ensure inputs are in the correct format
-            one_hot = one_hot.unsqueeze(0)  # Add batch dimension
-            charges = charges.unsqueeze(0).unsqueeze(-1)  # Add batch and last dimension
-            coords = coords.unsqueeze(0)  # Add batch dimension
-            node_mask = node_mask.unsqueeze(0)  # Add batch dimension
+        #     # Ensure inputs are in the correct format
+        #     one_hot = one_hot.unsqueeze(0)  # Add batch dimension
+        #     charges = charges.unsqueeze(0).unsqueeze(-1)  # Add batch and last dimension
+        #     coords = coords.unsqueeze(0)  # Add batch dimension
+        #     node_mask = node_mask.unsqueeze(0)  # Add batch dimension
             
-            atom_stability = compute_atom_stability(one_hot, charges, coords, node_mask, dataset_info)
-            number_atoms_stable += atom_stability.sum().item()
-            if number_atoms_stable == len(samples[s][0]):
-                number_molecules_stable += 1
-            print(f"number_atoms_stable: {number_atoms_stable}")
+        #     atom_stability = compute_atom_stability(one_hot, charges, coords, node_mask, dataset_info)
+        #     number_atoms_stable += atom_stability.sum().item()
+        #     if number_atoms_stable == len(samples[s][0]):
+        #         number_molecules_stable += 1
+        #     print(f"number_atoms_stable: {number_atoms_stable}")
 
-        percentage_atoms_stable = (number_atoms_stable / number_atoms) * 100
-        percentage_molecules_stable = (number_molecules_stable / num_molecules) * 100
-        print(f"percentage_atoms_stable: {percentage_atoms_stable:.2f} %")
-        print(f"percentage_molecules_stable: {percentage_molecules_stable:.2f} %")
+        # percentage_atoms_stable = (number_atoms_stable / number_atoms) * 100
+        # percentage_molecules_stable = (number_molecules_stable / num_molecules) * 100
+        # print(f"percentage_atoms_stable: {percentage_atoms_stable:.2f} %")
+        # print(f"percentage_molecules_stable: {percentage_molecules_stable:.2f} %")
         
-        pass
+        # pass
     else:
         raise NotImplementedError
 else:
