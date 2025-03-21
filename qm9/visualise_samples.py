@@ -20,10 +20,7 @@ from qm9 import bond_analyze
 
 # Files
 def save_xyz_file(path, one_hot, charges, positions, dataset_info, id_from=0, name='molecule', node_mask=None):
-    try:
-        os.makedirs(path)
-    except OSError:
-        pass
+    os.makedirs(path, exist_ok=True)
 
     if node_mask is not None:
         atomsxmol = torch.sum(node_mask, dim=1)
@@ -31,15 +28,21 @@ def save_xyz_file(path, one_hot, charges, positions, dataset_info, id_from=0, na
         atomsxmol = [one_hot.size(1)] * one_hot.size(0)
 
     for batch_i in range(one_hot.size(0)):
-        f = open(path + name + '_' + "%03d.txt" % (batch_i + id_from), "w")
-        f.write("%d\n\n" % atomsxmol[batch_i])
-        atoms = torch.argmax(one_hot[batch_i], dim=1)
-        n_atoms = int(atomsxmol[batch_i])
-        for atom_i in range(n_atoms):
-            atom = atoms[atom_i]
-            atom = dataset_info['atom_decoder'][atom]
-            f.write("%s %.9f %.9f %.9f\n" % (atom, positions[batch_i, atom_i, 0], positions[batch_i, atom_i, 1], positions[batch_i, atom_i, 2]))
-        f.close()
+        filename = os.path.join(path, f"{name}_{batch_i + id_from:03d}.txt")
+        with open(filename, "w") as f:
+            f.write("%d\n\n" % atomsxmol[batch_i])
+            atoms = torch.argmax(one_hot[batch_i], dim=1)
+            n_atoms = int(atomsxmol[batch_i])
+            for atom_i in range(n_atoms):
+                atom = atoms[atom_i]
+                atom = dataset_info['atom_decoder'][atom]
+                f.write("%s %.9f %.9f %.9f\n" % (
+                    atom,
+                    positions[batch_i, atom_i, 0],
+                    positions[batch_i, atom_i, 1],
+                    positions[batch_i, atom_i, 2]
+                ))
+
 
 
 def load_molecule_xyz(file, dataset_info):
@@ -60,10 +63,18 @@ def load_molecule_xyz(file, dataset_info):
 
 
 def load_xyz_files(path, shuffle=True):
-    files = glob.glob(path + "/*.txt")
+    # Ensure path is a directory
+    if not os.path.isdir(path):
+        raise ValueError(f"Expected a directory for path, got file or invalid path: {path}")
+
+    # Build proper search pattern using os.path.join
+    pattern = os.path.join(path, "*.txt")
+    files = glob.glob(pattern)
+
     if shuffle:
         random.shuffle(files)
     return files
+
 
 
 # Plotting
@@ -124,57 +135,47 @@ def plot_molecule(ax, positions, atom_type, alpha, spheres_3d, hex_bg_color, dat
                 ax.plot([x[i], x[j]], [y[i], y[j]], [z[i], z[j]], linewidth=line_width * linewidth_factor, c=hex_bg_color, alpha=alpha)
 
 
-def plot_data3d(positions, atom_type, dataset_info, camera_elev=0, camera_azim=0, save_path=None, spheres_3d=False, bg='black', alpha=1.):
+def plot_data3d(positions, atom_type, dataset_info,
+                camera_elev=0, camera_azim=0,
+                save_path=None,
+                spheres_3d=False,
+                bg='black',
+                alpha=1.):
+    
     black = (0, 0, 0)
     white = (1, 1, 1)
     hex_bg_color = '#FFFFFF' if bg == 'black' else '#666666'
 
-    
     fig = plt.figure()
     ax = fig.add_subplot(projection='3d')
     ax.set_aspect('auto')
     ax.view_init(elev=camera_elev, azim=camera_azim)
-    if bg == 'black':
-        ax.set_facecolor(black)
-    else:
-        ax.set_facecolor(white)
-
+    
+    ax.set_facecolor(black if bg == 'black' else white)
     ax.xaxis.pane.set_alpha(0)
     ax.yaxis.pane.set_alpha(0)
     ax.zaxis.pane.set_alpha(0)
     ax._axis3don = False
 
-    if bg == 'black':
-        ax.xaxis.line.set_color("black")
-        ax.yaxis.line.set_color("black")
-        ax.zaxis.line.set_color("black")
-    else:
-        ax.xaxis.line.set_color("white")
-        ax.yaxis.line.set_color("white")
-        ax.zaxis.line.set_color("white")
+    line_color = "black" if bg == 'black' else "white"
+    ax.xaxis.line.set_color(line_color)
+    ax.yaxis.line.set_color(line_color)
+    ax.zaxis.line.set_color(line_color)
 
     plot_molecule(ax, positions, atom_type, alpha, spheres_3d, hex_bg_color, dataset_info)
 
-    if 'qm9' in dataset_info['name'] or 'qm7b' in dataset_info['name']:
-        max_value = positions.abs().max().item()
-
-        axis_lim = min(40, max(max_value / 1.5 + 0.3, 3.2))
-        ax.set_xlim(-axis_lim, axis_lim)
-        ax.set_ylim(-axis_lim, axis_lim)
-        ax.set_zlim(-axis_lim, axis_lim)
-    elif dataset_info['name'] == 'geom':
-        max_value = positions.abs().max().item()
-
-        axis_lim = min(40, max(max_value / 1.5 + 0.3, 3.2))
-        ax.set_xlim(-axis_lim, axis_lim)
-        ax.set_ylim(-axis_lim, axis_lim)
-        ax.set_zlim(-axis_lim, axis_lim)
-    else:
-        raise ValueError(dataset_info['name'])
+    max_value = positions.abs().max().item()
+    axis_lim = min(40, max(max_value / 1.5 + 0.3, 3.2))
+    ax.set_xlim(-axis_lim, axis_lim)
+    ax.set_ylim(-axis_lim, axis_lim)
+    ax.set_zlim(-axis_lim, axis_lim)
 
     dpi = 120 if spheres_3d else 50
 
     if save_path is not None:
+        # Ensure parent directory exists
+        os.makedirs(os.path.dirname(save_path), exist_ok=True)
+
         plt.savefig(save_path, bbox_inches='tight', pad_inches=0.0, dpi=dpi)
 
         if spheres_3d:
@@ -183,8 +184,8 @@ def plot_data3d(positions, atom_type, dataset_info, camera_elev=0, camera_azim=0
             imageio.imsave(save_path, img_brighter)
     else:
         plt.show()
-    plt.close()
 
+    plt.close()
 
 
 
