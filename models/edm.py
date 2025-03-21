@@ -200,7 +200,7 @@ class EDM(BaseEDM):
         
         edges, reduce, demean, expand_idx, batch_mean, batch_sum = get_util_tensors(num_atoms)
 
-        self.logsig0 = self.schedule.sigma_squared[0].log()-self.schedule.alpha_squared[0]
+        self.logsig0 = self.schedule.sigma_squared[0].log()-self.schedule.alpha_squared[0].log()
 
         self.sd={}
 
