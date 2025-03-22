@@ -13,15 +13,18 @@ from configs.model_config import get_config_from_args
 from models.variance_edm import VarianceEDM
 from models.base import BaseEDM
 from models.edm import EDM
-from extensions.vanilla.full_eval import compute_atom_stability, compute_molecule_stability
+from stability_unique_valid import compute_stability_unique_and_valid, check_stability
+import multiprocessing as mp
 from configs.datasets_config import get_dataset_info
-from models.regularization_edm import RegularizationEDM
+import pickle
+
+# from models.regularization_edm import RegularizationEDM
 
 from os import path
 import pickle
 import wandb
-
 from args import args, parser
+from tqdm.auto import tqdm
 
 if __name__ == "__main__":
     torch.manual_seed(args.seed)
@@ -51,8 +54,8 @@ if __name__ == "__main__":
         raise NotImplementedError
     
     # just for KJ
-    # if args.device == 'cuda' and not torch.cuda.is_available():
-    #     args.device = 'mps'
+    if args.device == 'cuda' and not torch.cuda.is_available():
+        args.device = 'cpu'
     
     assert hasattr(dataloaders["train"].dataset, "num_atom_types")
     model = Model(get_config_from_args(args, dataloaders["train"].dataset.num_atom_types))  # type: ignore
@@ -62,8 +65,8 @@ if __name__ == "__main__":
         model.load_state_dict(torch.load(path.join(args.checkpoint, "model.pth"), map_location=args.device))  # always load the model as checkpoint
         
         # just for KJ as on a Mac and cannot load CUDA checkpoints directly
-        # map_location = torch.device("mps") if torch.backends.mps.is_available() else torch.device("cpu")
-        # model.load_state_dict(torch.load(path.join(args.checkpoint, "model.pth"), map_location=map_location))
+        map_location = torch.device("cpu") if torch.backends.mps.is_available() else torch.device("cpu")
+        model.load_state_dict(torch.load(path.join(args.checkpoint, "model.pth"), map_location=map_location))
     if args.pipeline == "train":
         model_ema = Model(get_config_from_args(args, dataloaders["train"].dataset.num_atom_types))  # type: ignore
         model_ema.load_state_dict(model.state_dict())  # initialise the ema model to be the same as the model
@@ -124,52 +127,46 @@ if __name__ == "__main__":
         mol_sizes = torch.tensor(list(DATASET_INFO[args.dataset]["molecule_size_histogram"].keys()), dtype=torch.long, device=args.device)
         mol_size_probs = torch.tensor(list(DATASET_INFO[args.dataset]["molecule_size_histogram"].values()), dtype=torch.float, device=args.device)
         print(f"Sampling from 'model.pth'")
-        samples = model.sample(num_molecules, batch_size, mol_sizes, mol_size_probs)
-        number_molecules_stable = 0
-        number_atoms_stable = 0
-        number_atoms = 0
         
-        for s in range(len(samples)):
-            print(f"molecule {s+1} has {len(samples[s][0])} atoms")
-            number_atoms += len(samples[s][0])
-            # xyz coords of each atom
-            
-            # print(f"xyz coords: {samples[0][0]}")
-            coords = torch.tensor(samples[s][0], device=args.device)
         
-            # one hot encoding of atom type H, C, O, N, F
-            # print(f"one hot encoding of atoms: {samples[0][1]}")
-            one_hot = torch.tensor(samples[s][1], device=args.device)
+        ########################## sampling section ##########################################################
+        # avoids running out of memory for larger samples
+        all_samples = []
+        model.to(args.device)
+
+        with torch.no_grad():
+            for i in tqdm(range(0, num_molecules, batch_size), desc="Sampling"):
+                current_batch_size = min(batch_size, num_molecules - i)
+                batch_samples = model.sample(current_batch_size, batch_size, mol_sizes, mol_size_probs)
+                all_samples.extend(batch_samples)
+
+        samples = all_samples
         
-            # predicted valencies of each atom
-            # print(f"charges: {samples[0][2]}")
-            charges = torch.tensor(samples[s][2], device=args.device)
+        with open("samples1_testing_again.pkl", "wb") as f:
+            pickle.dump(samples, f)
+        #########################################################################################################
 
-            node_mask = torch.ones(len(samples[s][0]), dtype=torch.bool, device=args.device)  # Shape: [num_atoms]
+        ########################## evaluation section ##########################################################
+        # Load list from file
+        import os
+        print(os.path.getsize("samples1_testing_again.pkl"))  # Should be > 0
 
-            if args.dataset == 'qm9':
-                remove_h = False
-            elif args.dataset == 'qm9_no_h':
-                remove_h = True
-            
-            dataset_info = get_dataset_info(remove_h)
-            
-            # Ensure inputs are in the correct format
-            one_hot = one_hot.unsqueeze(0)  # Add batch dimension
-            charges = charges.unsqueeze(0).unsqueeze(-1)  # Add batch and last dimension
-            coords = coords.unsqueeze(0)  # Add batch dimension
-            node_mask = node_mask.unsqueeze(0)  # Add batch dimension
-            
-            atom_stability = compute_atom_stability(one_hot, charges, coords, node_mask, dataset_info)
-            number_atoms_stable += atom_stability.sum().item()
-            if number_atoms_stable == len(samples[s][0]):
-                number_molecules_stable += 1
-            print(f"number_atoms_stable: {number_atoms_stable}")
+        with open("samples1_testing_again.pkl", "rb") as f:
+            samples = pickle.load(f)
 
-        percentage_atoms_stable = (number_atoms_stable / number_atoms) * 100
-        percentage_molecules_stable = (number_molecules_stable / num_molecules) * 100
-        print(f"percentage_atoms_stable: {percentage_atoms_stable:.2f} %")
-        print(f"percentage_molecules_stable: {percentage_molecules_stable:.2f} %")
+
+        dataset_info = get_dataset_info(remove_h=False)
+        print(f"dataset_info: {dataset_info}")
+        
+        percentage_atom_stability, percentage_molecule_stability, validity_percentage, valid_and_unique_percentage, res = compute_stability_unique_and_valid(samples, args)
+
+        print(f"results molecule stable, sample of 10 (T/F, number_stable_atoms, total_atoms_in_molecule): {res[0:10]}")
+        print(f"percentage_atoms_stable: {percentage_atom_stability:.4f} %")
+        print(f"percentage_molecules_stable: {percentage_molecule_stability:.4f} %")
+        print(f"valid: {validity_percentage:.4f}")
+        print(f"valid and unique: {valid_and_unique_percentage:.4f}")
+        
+        #########################################################################################################
         
         pass
     else:

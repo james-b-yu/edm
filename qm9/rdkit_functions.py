@@ -1,7 +1,7 @@
 from rdkit import Chem
 import numpy as np
 from qm9.bond_analyze import get_bond_order, geom_predictor
-from . import dataset
+# from . import dataset
 import torch
 from configs.datasets_config import get_dataset_info
 import pickle
@@ -80,9 +80,9 @@ class BasicMolecularMetrics(object):
         self.dataset_info = dataset_info
 
         # Retrieve dataset smiles only for qm9 currently.
-        if dataset_smiles_list is None and 'qm9' in dataset_info['name']:
-            self.dataset_smiles_list = retrieve_qm9_smiles(
-                self.dataset_info)
+        # if dataset_smiles_list is None and 'qm9' in dataset_info['name']:
+        #     self.dataset_smiles_list = retrieve_qm9_smiles(
+        #         self.dataset_info)
 
     def compute_validity(self, generated):
         """ generated: list of couples (positions, atom_types)"""
@@ -116,16 +116,17 @@ class BasicMolecularMetrics(object):
         """ generated: list of pairs (positions: n x 3, atom_types: n [int])
             the positions and atom types should already be masked. """
         valid, validity = self.compute_validity(generated)
-        print(f"Validity over {len(generated)} molecules: {validity * 100 :.2f}%")
+        # print(f"Validity over {len(generated)} molecules: {validity * 100 :.2f}%")
         if validity > 0:
             unique, uniqueness = self.compute_uniqueness(valid)
-            print(f"Uniqueness over {len(valid)} valid molecules: {uniqueness * 100 :.2f}%")
+            novelty = 0.0
+            # print(f"Uniqueness over {len(valid)} valid molecules: {uniqueness * 100 :.2f}%")
 
-            if self.dataset_smiles_list is not None:
-                _, novelty = self.compute_novelty(unique)
-                print(f"Novelty over {len(unique)} unique valid molecules: {novelty * 100 :.2f}%")
-            else:
-                novelty = 0.0
+            # if self.dataset_smiles_list is not None:
+            #     _, novelty = self.compute_novelty(unique)
+                # print(f"Novelty over {len(unique)} unique valid molecules: {novelty * 100 :.2f}%")
+            # else:
+            #     novelty = 0.0
         else:
             novelty = 0.0
             uniqueness = 0.0

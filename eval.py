@@ -116,3 +116,61 @@ if __name__ == "__main__":
     test_data = load_test_data()
     nll = compute_nll(model, test_data)
     print(f"Negative Log-Likelihood (NLL): {nll}")
+    
+# save
+ # number_molecules_stable = 0
+        # number_atoms_stable = 0
+        # number_atoms_stable_total = 0
+        # number_atoms = 0
+        
+        # if args.dataset == 'qm9':
+        #     remove_h = False
+        # elif args.dataset == 'qm9_no_h':
+        #     remove_h = True
+        
+        # dataset_info = get_dataset_info(remove_h)
+        
+        # for s in range(len(samples)):
+            
+        #     #get valid and unique metrics
+        #     m = BasicMolecularMetrics(dataset_info)
+        #     (validity, uniqueness, _) , _= m.evaluate([(torch.from_numpy(s[0]), torch.from_numpy(s[1]).argmax(dim=-1)) for s in samples])
+            
+        #     # print(f"molecule {s+1} has {len(samples[s][0])} atoms")
+        #     number_atoms += len(samples[s][0])
+        #     # xyz coords of each atom
+            
+        #     # print(f"xyz coords: {samples[0][0]}")
+        #     coords = torch.tensor(samples[s][0], device=args.device)
+        
+        #     # one hot encoding of atom type H, C, O, N, F
+        #     # print(f"one hot encoding of atoms: {samples[0][1]}")
+        #     one_hot = torch.tensor(samples[s][1], device=args.device)
+        
+        #     # predicted valencies of each atom
+        #     # print(f"charges: {samples[0][2]}")
+        #     charges = torch.tensor(samples[s][2], device=args.device)
+
+        #     node_mask = torch.ones(len(samples[s][0]), dtype=torch.bool, device=args.device)  # Shape: [num_atoms]
+            
+        #     # Ensure inputs are in the correct format
+        #     one_hot = one_hot.unsqueeze(0)  # Add batch dimension
+        #     charges = charges.unsqueeze(0).unsqueeze(-1)  # Add batch and last dimension
+        #     coords = coords.unsqueeze(0)  # Add batch dimension
+        #     node_mask = node_mask.unsqueeze(0)  # Add batch dimension
+            
+        #     samples_torch = [(torch.from_numpy(s[0]), torch.from_numpy(s[1]).argmax(dim=-1)) for s in samples]
+        #     res = [check_stability(s[0], s[1], dataset_info) for s in samples_torch] # tqdm(
+        #     molecule_stabililty = np.mean([r[0] for r in res])
+        #     atom_stability = np.sum([r[1] for r in res]) / np.sum([r[2] for r in res])
+
+        #     # print(f"Molecule stability was {molecule_stabililty:.2f} and atom stability was {atom_stability:.2f}")
+            
+        #     # atom_stability_wrong = compute_atom_stability(one_hot, charges, coords, node_mask, dataset_info)
+        #     # number_atoms_stable_per_molecule = np.sum(atom_stability_wrong)
+            
+        #     # number_atoms_stable_total += number_atoms_stable_per_molecule
+        
+        # # stability from correct author code
+        # percentage_atoms_stable = atom_stability * 100
+        # percentage_molecules_stable = molecule_stabililty * 100
