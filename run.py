@@ -22,6 +22,7 @@ from qm9.visualise_samples import save_xyz_file,load_xyz_files, load_molecule_xy
 from os import path
 import pickle
 import wandb
+from tqdm import tqdm
 
 from args import args, parser
 
@@ -135,8 +136,6 @@ if __name__ == "__main__":
     elif args.pipeline == "sample":
         model.eval()
 
-        # print(args.sample_save_dir)
-
         num_molecules = args.num_samples
         batch_size = args.batch_size
         mol_sizes = torch.tensor(list(DATASET_INFO[args.dataset]["molecule_size_histogram"].keys()), dtype=torch.long, device=args.device)
@@ -144,8 +143,6 @@ if __name__ == "__main__":
         print(f"Sampling from 'model.pth'")
         samples = model.sample(num_molecules, batch_size, mol_sizes, mol_size_probs)
 
-        # print("Samples: ")
-        # print(samples)
 
         if args.save_samples_xyz:
             dataset_info = get_dataset_info(remove_h=args.dataset == "qm9_no_h")
@@ -167,24 +164,6 @@ if __name__ == "__main__":
                     name="sample"
                 )
 
-        # dataset_info = get_dataset_info(remove_h=args.dataset == "qm9_no_h")
-        # output_path = args.sample_save_dir
-        # os.makedirs(output_path, exist_ok=True)
-
-        # for i, (coords, one_hot, charges) in enumerate(samples):
-        #     coords = torch.tensor(coords).unsqueeze(0)         # [1, N, 3]
-        #     one_hot = torch.tensor(one_hot).unsqueeze(0)        # [1, N, A]
-        #     charges = torch.tensor(charges).unsqueeze(0)        # [1, N]
-
-        #     save_xyz_file(
-        #         path=output_path,
-        #         one_hot=one_hot,
-        #         charges=charges,
-        #         positions=coords,
-        #         dataset_info=dataset_info,
-        #         id_from=i,
-        #         name="sample"
-        #     )
 
     
         
@@ -244,7 +223,7 @@ if __name__ == "__main__":
         # Load files
         xyz_files = load_xyz_files(xyz_path, shuffle=False)
 
-        for file in xyz_files:
+        for file in tqdm(xyz_files, desc="Visualising molecules"):
             coords, one_hot, _ = load_molecule_xyz(file, dataset_info)
             
             atom_types = torch.argmax(one_hot, dim=-1).numpy()
@@ -261,7 +240,8 @@ if __name__ == "__main__":
                 dataset_info=dataset_info,
                 save_path=img_path,
                 spheres_3d=True,
-                bg='black'
+                bg='black',
+                alpha=0.6
             )
 
     

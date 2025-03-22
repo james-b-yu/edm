@@ -141,14 +141,6 @@ class EDM(BaseEDM):
         van_vlb_zero = -get_van_vlb_zeroth_term()
         van_vlb_est = -data.size_log_probs + van_vlb_zero + self.config.num_steps * van_kl_t_greater_than_zero
         return van_vlb_est.mean(), avr_sq_dist
-    
-    # def std_x(self, time: int | torch.Tensor):
-    #     """noise schedule standard deviation."""
-    #     return self.schedule.sigma[time]  # sqrt(sigma_squared)
-
-    # def std_h(self, time: int | torch.Tensor):
-    #     """noise schedule standard deviation."""
-    #     return self.schedule.sigma[time]  # Apply to all feature dimensions
 
     def std_x(self, time: int | torch.Tensor):
         """get generative model backward standard deviation at time t for coords
@@ -208,16 +200,6 @@ class EDM(BaseEDM):
         self.sd["V_x"][0]=self.logsig0
         self.sd["V_h"]=self.schedule.rev_beta.log()[:,None].repeat(1,6)
         self.sd["V_h"][0,:]=self.logsig0
-
-
-        # print("Variance")
-
-        # print("edges: ")
-        # print(edges)
-        # print("reduce: ")
-        # print(reduce)
-        # print("demean: ")
-        # print(demean)
         
         coords = demean @ torch.randn(size=(N, 3), dtype=torch.float32, device=self.config.device)
         feats = torch.randn(size=(N, self.config.num_atom_types + 1), dtype=torch.float32, device=self.config.device)
@@ -225,8 +207,6 @@ class EDM(BaseEDM):
         T = self.config.num_steps
         for t_int in tqdm(range(T, 0, -1), leave=False, unit="step"):
 
-            # print("t_int: ")
-            # print(t_int)
             # sample z(t-1) | z(t)
             t_frac = t_int/T
             alf_t = self.schedule.alpha[t_int]
@@ -234,63 +214,18 @@ class EDM(BaseEDM):
             bet_t = self.schedule.beta[t_int]
             # sig_t = self.schedule.sigma[t_int]
             sig_t = self.schedule.sigma[t_int].clamp(min=1e-6)
-
-
-            # print("alf_t: ")
-            # print(alf_t)
-            # print("alf_s: ")
-            # print(alf_s)
-            # print("bet_t: ")
-            # print(bet_t)
-            # print("sig_t: ")
-            # print(sig_t)
             
             new_eps_coords = demean @ torch.randn_like(coords)
             new_eps_feats = torch.randn_like(feats)
             pred_eps_coords, pred_eps_feats = self.egnn(n_nodes=num_atoms, coords=coords, features=feats, edges=edges, reduce=reduce, demean=demean, time_frac=t_frac)
 
-            # print("pred_eps_coords: ")
-            # print(pred_eps_coords)
-            # print("pred_eps_feats: ")
-            # print(pred_eps_feats)
-
-            # std_coords = self.std_x(t_int)
-            # std_feats = self.std_h(t_int)
-
-            # if I set this to 0.2 or less, the stabilty issues remain in check
-            # std_coords = self.schedule.sigma[t_int]*0.2
-            # std_feats = self.schedule.sigma[t_int]*0.2
-
             std_coords = self.std_x(t_int)
             std_feats = self.std_h(t_int)
-            # print("std_coords: ")
-            # print(std_coords)
-
-            # print( self.schedule.sigma[t_int]*0.2)
-
-            # std_scale = 0.2 + 0.5 * (t_int / self.config.num_steps)  # Start low, increase over time
-            # std_coords = self.schedule.sigma[t_int] * std_scale
-            # std_feats = self.schedule.sigma[t_int] * std_scale
-
-
-            # print("std_coords: ")
-            # print(std_coords)
-            # print("std_feats: ")
-            # print(std_feats)
-
-            # time.sleep(0.1)
-
             
             coords = (alf_s / alf_t) * coords - (alf_s / alf_t) * (bet_t / sig_t) * pred_eps_coords + std_coords * new_eps_coords
             feats  = (alf_s / alf_t) * feats  - (alf_s / alf_t) * (bet_t / sig_t) * pred_eps_feats  + std_feats  * new_eps_feats
 
-            # print("coords: ")
-            # print(coords)
-            # print("feats: ")
-            # print(feats)
-
-            # time.sleep(1)
-
+        
         # now z(0) = (coords, feats) so we need to sample x | z(0)
         alf_0 = self.schedule.alpha[0]
         sig_0 = self.schedule.sigma[0]
@@ -309,8 +244,5 @@ class EDM(BaseEDM):
         one_hot, charges = feats[:, :-1], feats[:, -1]
         coords, one_hot, charges = self.unscale_inputs(coords, one_hot, charges)
         one_hot, charges = one_hot.round().to(dtype=torch.long), charges.round().to(dtype=torch.long)
-
-        print("coords:", coords)
-        print("one_hot:", one_hot)
         
         return coords, one_hot, charges
