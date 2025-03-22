@@ -9,6 +9,7 @@ from rdkit import Chem
 from rdkit.Chem import AllChem
 from qm9 import bond_analyze
 from configs.datasets_config import get_dataset_info
+from qm9.rdkit_functions import BasicMolecularMetrics
 import pickle
 import os
 
@@ -59,9 +60,9 @@ def compute_atom_stability(one_hot, charges, coords, node_mask, dataset_info):
         torch.Tensor: Boolean tensor [batch, num_atoms] indicating whether each atom is stable.
     """
     
-    print(f"coords before normalization: {coords}")
-    coords = normalize_coords(coords)
-    print(f"coords after normalization: {coords}")
+    # print(f"coords before normalization: {coords}")
+    # coords = normalize_coords(coords)
+    # print(f"coords after normalization: {coords}")
 
     batch_size, num_atoms, num_atom_classes = one_hot.shape
     atom_decoder = dataset_info['atom_decoder']
@@ -79,22 +80,30 @@ def compute_atom_stability(one_hot, charges, coords, node_mask, dataset_info):
         coords = coords_batch[b]
 
         valid_mask = node_mask_batch[b].astype(bool)  # Convert mask to boolean
-        positions = coords[valid_mask]  
+        positions = coords 
         atom_types_b = atom_types[valid_mask]  
 
-        valid_atoms = atom_types_b != 0  
+        valid_atoms = atom_types_b
         positions = positions[valid_atoms]
         atom_types_b = atom_types_b[valid_atoms]
         nr_bonds = np.zeros(len(positions), dtype=int)  # Reset per molecule
 
-        print(f"positions: {positions}")
-        print(f"atom_types_b: {atom_types_b}")
+        # print(f"positions: {positions}")
+        # print(f"atom_types_b: {atom_types_b}")
 
-        for i in range(len(positions)):
-            for j in range(i + 1, len(positions)):
-                p1 = positions[i]
-                p2 = positions[j]
-                dist = np.linalg.norm(p1 - p2)
+
+        assert len(positions.shape) == 2, f"Expected 2D positions, got {positions.shape}"
+        assert positions.shape[1] == 3, f"Expected 3D positions, got {positions.shape[1]}"
+        x = positions[:, 0]
+        y = positions[:, 1]
+        z = positions[:, 2]
+        
+        
+        for i in tqdm(range(len(x))):
+            for j in range(i + 1, len(x)):
+                p1 = np.array([x[i], y[i], z[i]])
+                p2 = np.array([x[j], y[j], z[j]])
+                dist = np.sqrt(np.sum((p1 - p2) ** 2))
                 atom1, atom2 = atom_decoder[atom_types_b[i]], atom_decoder[atom_types_b[j]]
 
                 order = bond_analyze.get_bond_order(atom1, atom2, dist)
@@ -106,28 +115,33 @@ def compute_atom_stability(one_hot, charges, coords, node_mask, dataset_info):
                 # print(f"Bond: {atom1}-{atom2}, Distance: {dist:.3f}, Order: {order}")
                 # print(f"Updated bonds: Atom {i} ({atom1}) = {nr_bonds[i]}, Atom {j} ({atom2}) = {nr_bonds[j]}")
 
-        nr_stable_bonds = 0
         for atom_type_i, nr_bonds_i in zip(atom_types_b, nr_bonds):
             possible_bonds = bond_analyze.allowed_bonds[atom_decoder[atom_type_i]]
 
             
             if len(atom_decoder) == 5:
                 is_stable = possible_bonds == nr_bonds_i
-                print(f"with H: {is_stable}")
+                # print(f"with H: {is_stable}")
             elif len(atom_decoder) == 4:
                 # For QM9 without H, we allow the rest can be filled with H bonds
                 
-                print(f"possible bonds: {possible_bonds}")
-                print(f"nr_bonds_i: {nr_bonds_i}")
+                # print(f"possible bonds: {possible_bonds}")
+                # print(f"nr_bonds_i: {nr_bonds_i}")
                 is_stable = possible_bonds >= nr_bonds_i
-                print(f"without H: {is_stable}")
+                # print(f"without H: {is_stable}")
 
-            nr_stable_bonds += int(is_stable)
+            stability_results.append(is_stable)
+            
 
-        molecule_stable = nr_stable_bonds == len(positions) # molecule stable if all atoms are stable
-        stability_results.append(torch.tensor([molecule_stable] * len(positions), dtype=torch.bool, device=one_hot.device))
+    # metrics = BasicMolecularMetrics(dataset_info)
+    # rdkit_metrics = metrics.evaluate(processed_list)
+    # print("Unique molecules:", rdkit_metrics[1])
+    
+    
 
-    return torch.nn.utils.rnn.pad_sequence(stability_results, batch_first=True, padding_value=False) 
+       # stability_results.append(torch.tensor([molecule_stable] * len(positions), dtype=torch.bool, device=one_hot.device))
+    # print(stability_results)
+    return stability_results
 
 def compute_molecule_stability(one_hot, charges, coords, node_mask, dataset_info):
     """
@@ -179,6 +193,8 @@ def polynomial_schedule_just_sigma(timesteps: int, device: torch.device|str, pow
         alphas2 = np.clip(alphas2, a_min=clip_value, a_max=1.)
         alphas2 = alphas2 / alphas2[0]
         return alphas2
+
+
 
 
 def run_eval(args: Namespace, dl: DataLoader):

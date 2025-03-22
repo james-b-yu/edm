@@ -1,3 +1,4 @@
+*.ipynb
 .DS_store
 .conda/
 data/
@@ -187,3 +188,6 @@ cython_debug/
 /2025-03-10 Partially Pretrained Own Architecture
 drugs_featurized.msgpack
 scheduler_epoch_576.pth
+*.txt
+samples1_test_no_h.pkl
+samples1_testing_again.pkl

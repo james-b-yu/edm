@@ -1,7 +1,7 @@
 from argparse import Namespace
 from typing import Literal
 from torch.utils.data import DataLoader
-from tqdm import tqdm
+from tqdm.auto import tqdm
 import torch
 from os import path, makedirs
 import pickle
@@ -120,7 +120,7 @@ def enter_valid_loop(model: BaseEDM, split: Literal["valid", "test"], args: Name
         vlb, _ = one_valid_epoch(args, split, 0, dl, model)
         vlbs.append(vlb)
     vlbs = torch.tensor(vlbs, dtype=torch.float32, device="cpu")
-    return float(vlbs.mean()), float(vlbs.std() * (args.reruns ** -0.5))
+    return float(vlbs.mean()), float(vlbs.std())
   
 
 def _update_ema(beta: float, model: BaseEDM, model_ema: BaseEDM):

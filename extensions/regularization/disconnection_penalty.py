@@ -4,6 +4,7 @@ from collections import deque
 from extensions.regularization import compute_bonds
 # from configs.dataset_config import get_dataset_info
 from configs.datasets_config import get_dataset_info
+from configs.dataset_reg_config import get_dataset_info
 
 def bfs(start, A):
     queue = deque()
