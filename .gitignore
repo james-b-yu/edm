@@ -1,10 +1,10 @@
+*.ipynb
 .DS_store
 .conda/
 data/
 checkpoints/
 wandb/
 playground.py
-playground.ipynb
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
