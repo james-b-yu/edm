@@ -167,8 +167,6 @@ if __name__ == "__main__":
                     id_from=i,
                     name="sample"
                 )
-
-
     
         
         # number_molecules_stable = 0
@@ -230,20 +228,21 @@ if __name__ == "__main__":
                 all_samples.extend(batch_samples)
 
         samples = all_samples
-        
-        with open("samples1_testing_again.pkl", "wb") as f:
-            pickle.dump(samples, f)
         #########################################################################################################
+        
+        # with open("samples1_testing_again.pkl", "wb") as f:
+        #     pickle.dump(samples, f)
+
+
+        # # Load list from file
+        # import os
+        # print(os.path.getsize("samples1_testing_again.pkl"))  # Should be > 0
+
+        # with open("samples1_testing_again.pkl", "rb") as f:
+        #     samples = pickle.load(f)
+
 
         ########################## evaluation section ##########################################################
-        # Load list from file
-        import os
-        print(os.path.getsize("samples1_testing_again.pkl"))  # Should be > 0
-
-        with open("samples1_testing_again.pkl", "rb") as f:
-            samples = pickle.load(f)
-
-
         dataset_info = get_dataset_info(remove_h=False)
         print(f"dataset_info: {dataset_info}")
         

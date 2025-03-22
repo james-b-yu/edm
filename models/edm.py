@@ -198,7 +198,13 @@ class EDM(BaseEDM):
 
         self.sd["V_x"]=self.schedule.rev_beta.log()
         self.sd["V_x"][0]=self.logsig0
-        self.sd["V_h"]=self.schedule.rev_beta.log()[:,None].repeat(1,6)
+        
+        # this line results in a bug when using no H!
+        # self.sd["V_h"]=self.schedule.rev_beta.log()[:,None].repeat(1,6)
+        
+        # fixed version
+        self.sd["V_h"] = self.schedule.rev_beta.log()[:, None].repeat(1, self.config.num_atom_types + 1)
+
         self.sd["V_h"][0,:]=self.logsig0
         
         coords = demean @ torch.randn(size=(N, 3), dtype=torch.float32, device=self.config.device)
