@@ -1,7 +1,7 @@
 from argparse import Namespace
 from typing import Literal
 from torch.utils.data import DataLoader
-from tqdm import tqdm
+from tqdm.auto import tqdm
 import torch
 from os import path, makedirs
 import pickle
