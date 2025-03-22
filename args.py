@@ -22,7 +22,7 @@ def _validate_args(args: argparse.Namespace):
         raise argparse.ArgumentTypeError("--checkpoint must be set if not training")
 
 parser.add_argument("--seed", default=42, type=int, help="set the random seed")
-parser.add_argument("--no-wandb", default=True, action="store_false", dest="use_wandb", help="specify if you do not want to use wandb (if not specified, we use wandb)")
+parser.add_argument("--no-wandb", default=False, action="store_false", dest="use_wandb", help="specify if you do not want to use wandb (if not specified, we use wandb)")
 parser.add_argument("--wandb-project", default="MLMI4 EDM", type=str, help="wandb project name")
 parser.add_argument("--run-id", default=None, type=str, help="use specific wandb run id (e.g. when resuming)")
 
