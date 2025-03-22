@@ -4,7 +4,7 @@ from typing import Literal
 from warnings import warn
 import torch
 from torch import nn
-from tqdm import tqdm
+from tqdm.auto import tqdm
 from data import EDMDataloaderItem, get_util_tensors
 from models.base import EDMConfig, BaseEDM
 from utils.diffusion import cdf_standard_gaussian, cosine_beta_schedule, polynomial_schedule, gaussian_KL, gaussian_KL_batch

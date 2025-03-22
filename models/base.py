@@ -4,7 +4,7 @@ from typing import Any, Literal
 from warnings import warn
 import torch
 from torch import nn
-from tqdm import tqdm
+from tqdm.auto import tqdm
 from data import EDMDataloaderItem
 from configs.model_config import EDMConfig, EGCLConfig, EGNNConfig
 from utils.diffusion import cdf_standard_gaussian, cosine_beta_schedule, polynomial_schedule
@@ -198,7 +198,7 @@ class BaseEDM(nn.Module, ABC):
                     batch_idx += 1
                 
                 assert(batch_idx == B and flattened_idx == num_atoms.sum())
-                pbar.update(len(samples))
+                pbar.update(B)
             assert(len(samples) == num_molecules)
         
         return samples

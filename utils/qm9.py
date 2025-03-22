@@ -2,7 +2,7 @@ from os import path, makedirs
 import os
 from pathlib import Path
 from typing import Iterable, Sequence
-from tqdm import tqdm
+from tqdm.auto import tqdm
 import numpy as np
 import json
 

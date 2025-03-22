@@ -3,7 +3,7 @@ import os
 import shutil
 import sys
 import tarfile
-from tqdm import tqdm
+from tqdm.auto import tqdm
 from urllib import request
 
 sys.path.append("..")

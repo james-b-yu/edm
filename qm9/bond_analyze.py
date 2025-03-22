@@ -98,6 +98,7 @@ allowed_bonds = {'H': 1, 'C': 4, 'N': 3, 'O': 2, 'F': 1, 'B': 3, 'Al': 3,
 
 
 def get_bond_order(atom1, atom2, distance, check_exists=False):
+    # Remove the scaling factor of 100
     distance = 100 * distance  # We change the metric
     atomic_num_to_letters = {1: 'H', 6: 'C', 7: 'N', 8: 'O', 9: 'F'}
     
@@ -121,8 +122,10 @@ def get_bond_order(atom1, atom2, distance, check_exists=False):
 
     # margin1, margin2 and margin3 have been tuned to maximize the stability of
     # the QM9 true samples.
-    
-    
+    # debug
+    # print(f"distance between atoms {distance}")
+    # print(f"must be smaller than: {bonds1[atom1][atom2] + margin1} to create a bond")
+
     if distance < bonds1[atom1][atom2] + margin1:
 
         # Check if atoms in bonds2 dictionary.

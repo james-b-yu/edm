@@ -108,7 +108,7 @@ def run_eval(args: Namespace, dl: DataLoader):
 
     
     # so we have got config and model
-    for idx, data in enumerate(pbar := tqdm(dl)):
+    # for idx, data in enumerate(pbar := tqdm(dl)):
         total_nll_per_batch = 0 # reset per batch
         nll_coords = 0 # ensure is reset each batch
         nll_features = 0 # ensure is reset each batch
