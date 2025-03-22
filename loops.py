@@ -120,7 +120,7 @@ def enter_valid_loop(model: BaseEDM, split: Literal["valid", "test"], args: Name
         vlb, _ = one_valid_epoch(args, split, 0, dl, model)
         vlbs.append(vlb)
     vlbs = torch.tensor(vlbs, dtype=torch.float32, device="cpu")
-    return float(vlbs.mean()), float(vlbs.std() * (args.reruns ** -0.5))
+    return float(vlbs.mean()), float(vlbs.std())
   
 
 def _update_ema(beta: float, model: BaseEDM, model_ema: BaseEDM):
