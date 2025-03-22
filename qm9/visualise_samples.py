@@ -94,14 +94,6 @@ def plot_molecule(ax, positions, atom_type, alpha, spheres_3d, hex_bg_color, dat
     y = positions[:, 1]
     z = positions[:, 2]
 
-    # Color map for different bond types
-    bond_color_map = {
-        1: 'white',
-        2: 'skyblue',
-        3: 'lime',
-        4: 'violet'  # optional, if aromatic
-    }
-
     colors_dic = np.array(dataset_info['colors_dic'])
     radius_dic = np.array(dataset_info['radius_dic'])
     area_dic = 1500 * radius_dic ** 2
@@ -134,15 +126,15 @@ def plot_molecule(ax, positions, atom_type, alpha, spheres_3d, hex_bg_color, dat
                 raise Exception('Wrong dataset_info name')
 
             if draw_edge_int > 0:
-                bond_color = bond_color_map.get(draw_edge_int, 'gray')
                 draw_parallel_bonds(
                     ax, p1, p2,
                     bond_order=draw_edge_int,
                     offset=0.12,
-                    color=bond_color,
+                    color=hex_bg_color,
                     alpha=alpha,
                     linewidth=2
                 )
+
 
 def draw_parallel_bonds(ax, p1, p2, bond_order, offset=0.1, color='white', alpha=1.0, linewidth=2):
     """Draw 1 to 3 parallel bonds between p1 and p2"""
@@ -150,34 +142,38 @@ def draw_parallel_bonds(ax, p1, p2, bond_order, offset=0.1, color='white', alpha
         ax.plot([p1[0], p2[0]], [p1[1], p2[1]], [p1[2], p2[2]],
                 linewidth=linewidth, c=color, alpha=alpha)
     else:
-        # Bond direction
+        # Get bond direction vector
         direction = np.array(p2) - np.array(p1)
         direction = direction / (np.linalg.norm(direction) + 1e-8)
 
-        # Get perpendicular vector
+        # Get arbitrary perpendicular vector
         perp = np.cross(direction, np.array([0, 0, 1]))
         if np.linalg.norm(perp) < 1e-5:
             perp = np.cross(direction, np.array([0, 1, 0]))
         perp = perp / (np.linalg.norm(perp) + 1e-8)
 
-        # Double bond → 2 lines, Triple → 3 lines
+        # Draw multiple bonds with perpendicular offset
         if bond_order == 2:
+            shift = perp * offset
             for sign in [-1, 1]:
-                shift = perp * offset
-                ax.plot([p1[0] + sign * shift[0], p2[0] + sign * shift[0]],
-                        [p1[1] + sign * shift[1], p2[1] + sign * shift[1]],
-                        [p1[2] + sign * shift[2], p2[2] + sign * shift[2]],
+                p1_shifted = p1 + sign * shift
+                p2_shifted = p2 + sign * shift
+                ax.plot([p1_shifted[0], p2_shifted[0]],
+                        [p1_shifted[1], p2_shifted[1]],
+                        [p1_shifted[2], p2_shifted[2]],
                         linewidth=linewidth, c=color, alpha=alpha)
         elif bond_order == 3:
+            shift = perp * offset
             # Center line
             ax.plot([p1[0], p2[0]], [p1[1], p2[1]], [p1[2], p2[2]],
                     linewidth=linewidth, c=color, alpha=alpha)
             # Offset lines
             for sign in [-1, 1]:
-                shift = perp * offset
-                ax.plot([p1[0] + sign * shift[0], p2[0] + sign * shift[0]],
-                        [p1[1] + sign * shift[1], p2[1] + sign * shift[1]],
-                        [p1[2] + sign * shift[2], p2[2] + sign * shift[2]],
+                p1_shifted = p1 + sign * shift
+                p2_shifted = p2 + sign * shift
+                ax.plot([p1_shifted[0], p2_shifted[0]],
+                        [p1_shifted[1], p2_shifted[1]],
+                        [p1_shifted[2], p2_shifted[2]],
                         linewidth=linewidth, c=color, alpha=alpha)
 
 

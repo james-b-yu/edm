@@ -6,6 +6,9 @@ wandb/
 playground.py
 playground.ipynb
 outputs/
+pymol_part_1.py
+pymol_part_2.py
+
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
