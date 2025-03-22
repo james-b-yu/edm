@@ -5,6 +5,8 @@ data/
 checkpoints/
 wandb/
 playground.py
+playground.ipynb
+outputs/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
