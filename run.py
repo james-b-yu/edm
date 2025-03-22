@@ -11,17 +11,15 @@ from data import get_qm9_dataloader
 from configs.dataset_config import DATASET_INFO
 from loops import enter_train_loop, enter_valid_loop
 from configs.model_config import get_config_from_args
-from models.variance_edm import VarianceEDM
 from models.base import BaseEDM
 from models.edm import EDM
+from models.variance_edm import VarianceEDM
+from models.regularization_edm import RegularizationEDM
 from stability_unique_valid import compute_stability_unique_and_valid, check_stability
 import multiprocessing as mp
 from configs.datasets_config import get_dataset_info
-from models.regularization_edm import RegularizationEDM
 from qm9.visualise_samples import save_xyz_file,load_xyz_files, load_molecule_xyz, plot_data3d
 import pickle
-
-# from models.regularization_edm import RegularizationEDM
 
 from os import path
 import pickle
