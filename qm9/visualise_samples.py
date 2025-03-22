@@ -90,11 +90,9 @@ def draw_sphere(ax, x, y, z, size, color, alpha):
 
 
 def plot_molecule(ax, positions, atom_type, alpha, spheres_3d, hex_bg_color, dataset_info):
-
     x = positions[:, 0]
     y = positions[:, 1]
     z = positions[:, 2]
-    # Hydrogen, Carbon, Nitrogen, Oxygen, Flourine
 
     colors_dic = np.array(dataset_info['colors_dic'])
     radius_dic = np.array(dataset_info['radius_dic'])
@@ -114,25 +112,69 @@ def plot_molecule(ax, positions, atom_type, alpha, spheres_3d, hex_bg_color, dat
         for j in range(i + 1, len(x)):
             p1 = np.array([x[i], y[i], z[i]])
             p2 = np.array([x[j], y[j], z[j]])
-            dist = np.sqrt(np.sum((p1 - p2) ** 2))
-            atom1, atom2 = dataset_info['atom_decoder'][atom_type[i]], dataset_info['atom_decoder'][atom_type[j]]
+            dist = np.linalg.norm(p1 - p2)
+            atom1 = dataset_info['atom_decoder'][atom_type[i]]
+            atom2 = dataset_info['atom_decoder'][atom_type[j]]
             s = sorted((atom_type[i], atom_type[j]))
             pair = (dataset_info['atom_decoder'][s[0]], dataset_info['atom_decoder'][s[1]])
+
             if 'qm9' in dataset_info['name'] or 'qm7b' in dataset_info['name']:
                 draw_edge_int = bond_analyze.get_bond_order(atom1, atom2, dist)
-                line_width = (3 - 2) * 2 * 2
             elif dataset_info['name'] == 'geom':
                 draw_edge_int = bond_analyze.geom_predictor(pair, dist)
-                line_width = 2
             else:
                 raise Exception('Wrong dataset_info name')
-            draw_edge = draw_edge_int > 0
-            if draw_edge:
-                if draw_edge_int == 4:
-                    linewidth_factor = 1.5
-                else:
-                    linewidth_factor = 1
-                ax.plot([x[i], x[j]], [y[i], y[j]], [z[i], z[j]], linewidth=line_width * linewidth_factor, c=hex_bg_color, alpha=alpha)
+
+            if draw_edge_int > 0:
+                draw_parallel_bonds(
+                    ax, p1, p2,
+                    bond_order=draw_edge_int,
+                    offset=0.12,
+                    color=hex_bg_color,
+                    alpha=alpha,
+                    linewidth=2
+                )
+
+def draw_parallel_bonds(ax, p1, p2, bond_order, offset=0.1, color='white', alpha=1.0, linewidth=2):
+    """Draw 1 to 3 parallel bonds between p1 and p2"""
+    if bond_order == 1:
+        ax.plot([p1[0], p2[0]], [p1[1], p2[1]], [p1[2], p2[2]],
+                linewidth=linewidth, c=color, alpha=alpha)
+    else:
+        # Get bond direction vector
+        direction = np.array(p2) - np.array(p1)
+        direction = direction / (np.linalg.norm(direction) + 1e-8)
+
+        # Get arbitrary perpendicular vector
+        perp = np.cross(direction, np.array([0, 0, 1]))
+        if np.linalg.norm(perp) < 1e-5:
+            perp = np.cross(direction, np.array([0, 1, 0]))
+        perp = perp / (np.linalg.norm(perp) + 1e-8)
+
+        # Draw multiple bonds with perpendicular offset
+        if bond_order == 2:
+            shift = perp * offset
+            for sign in [-1, 1]:
+                p1_shifted = p1 + sign * shift
+                p2_shifted = p2 + sign * shift
+                ax.plot([p1_shifted[0], p2_shifted[0]],
+                        [p1_shifted[1], p2_shifted[1]],
+                        [p1_shifted[2], p2_shifted[2]],
+                        linewidth=linewidth, c=color, alpha=alpha)
+        elif bond_order == 3:
+            shift = perp * offset
+            # Center line
+            ax.plot([p1[0], p2[0]], [p1[1], p2[1]], [p1[2], p2[2]],
+                    linewidth=linewidth, c=color, alpha=alpha)
+            # Offset lines
+            for sign in [-1, 1]:
+                p1_shifted = p1 + sign * shift
+                p2_shifted = p2 + sign * shift
+                ax.plot([p1_shifted[0], p2_shifted[0]],
+                        [p1_shifted[1], p2_shifted[1]],
+                        [p1_shifted[2], p2_shifted[2]],
+                        linewidth=linewidth, c=color, alpha=alpha)
+
 
 
 def plot_data3d(positions, atom_type, dataset_info,
