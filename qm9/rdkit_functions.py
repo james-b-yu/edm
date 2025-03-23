@@ -1,7 +1,7 @@
 from rdkit import Chem
 import numpy as np
 from qm9.bond_analyze import get_bond_order, geom_predictor
-from . import dataset
+# from . import dataset
 import torch
 from configs.datasets_config import get_dataset_info
 import pickle
@@ -81,8 +81,7 @@ class BasicMolecularMetrics(object):
 
         # Retrieve dataset smiles only for qm9 currently.
         if dataset_smiles_list is None and 'qm9' in dataset_info['name']:
-            self.dataset_smiles_list = retrieve_qm9_smiles(
-                self.dataset_info)
+            pass
 
     def compute_validity(self, generated):
         """ generated: list of couples (positions, atom_types)"""

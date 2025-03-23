@@ -1,3 +1,4 @@
+from matplotlib.colors import LinearSegmentedColormap
 import torch
 import numpy as np
 import os
@@ -75,30 +76,48 @@ def draw_sphere(ax, x, y, z, size, color, alpha):
     ys = size * np.outer(np.sin(u), np.sin(v)) * 0.8  # Correct for matplotlib.
     zs = size * np.outer(np.ones(np.size(u)), np.cos(v))
 
-    ax.plot_surface(x + xs, y + ys, z + zs, rstride=2, cstride=2, color=color, linewidth=0, alpha=alpha)
+    ax.plot_surface(x + xs, y + ys, z + zs, rstride=2, cstride=2, color=color, linewidth=0, alpha=alpha, shade=True)
 
+def rgb_to_hex(rgb):
+    if isinstance(rgb, torch.Tensor):
+        rgb = rgb.to(dtype=torch.long).clamp(0, 255)
+    else:
+        assert isinstance(rgb, np.ndarray)
+        rgb = rgb.astype(dtype=np.long).clamp(0, 255)
+    return '#{:02x}{:02x}{:02x}'.format(rgb[0], rgb[1], rgb[2])
 
 def plot_molecule(ax, positions, atom_type, alpha, spheres_3d, hex_bg_color, dataset_info):
+
 
     x = positions[:, 0]
     y = positions[:, 1]
     z = positions[:, 2]
     # Hydrogen, Carbon, Nitrogen, Oxygen, Flourine
 
-    colors_dic = np.array(dataset_info['colors_dic'])
-    radius_dic = np.array(dataset_info['radius_dic'])
+    colors_dic = np.array([
+        [255, 170, 170],
+        [120, 120, 120],
+        [100, 149, 237],
+        [255, 105, 105],
+        [144, 238, 144]
+    ], dtype=np.float32)
+    radius_dic = 0.75 * np.array(dataset_info['radius_dic'])
     area_dic = 1500 * radius_dic ** 2
 
-    areas = area_dic[atom_type]
-    radii = radius_dic[atom_type]
-    colors = colors_dic[atom_type]
-
+    if atom_type.dim() == 1:
+        areas = area_dic[atom_type]
+        radii = radius_dic[atom_type]
+        colors = colors_dic[atom_type]
+    else:
+        areas = atom_type @ area_dic
+        radii = atom_type @ radius_dic
+        colors = atom_type @ colors_dic
+        atom_type = atom_type.argmax(dim=-1)
     if spheres_3d:
         for i, j, k, s, c in zip(x, y, z, radii, colors):
-            draw_sphere(ax, i.item(), j.item(), k.item(), 0.7 * s, c, alpha)
+            draw_sphere(ax, i.item(), j.item(), k.item(), 0.7 * s, rgb_to_hex(c), 0.9)
     else:
-        ax.scatter(x, y, z, s=areas, alpha=0.9 * alpha, c=colors)
-
+        ax.scatter(x, y, z, s=areas, c=[rgb_to_hex(col) for col in colors])
     for i in range(len(x)):
         for j in range(i + 1, len(x)):
             p1 = np.array([x[i], y[i], z[i]])
@@ -121,7 +140,9 @@ def plot_molecule(ax, positions, atom_type, alpha, spheres_3d, hex_bg_color, dat
                     linewidth_factor = 1.5
                 else:
                     linewidth_factor = 1
-                ax.plot([x[i], x[j]], [y[i], y[j]], [z[i], z[j]], linewidth=line_width * linewidth_factor, c=hex_bg_color, alpha=alpha)
+                ax.plot([x[i], x[j]], [y[i], y[j]], [z[i], z[j]], linewidth=line_width * linewidth_factor, c="#AAAAAA", alpha=0.7)
+                
+    
 
 
 def plot_data3d(positions, atom_type, dataset_info, camera_elev=0, camera_azim=0, save_path=None, spheres_3d=False, bg='black', alpha=1.):
@@ -143,22 +164,38 @@ def plot_data3d(positions, atom_type, dataset_info, camera_elev=0, camera_azim=0
     ax.yaxis.pane.set_alpha(0)
     ax.zaxis.pane.set_alpha(0)
     ax._axis3don = False
+    ax.set_axis_off()  # Hide axis
+    ax.set_facecolor('#FFFFFF00')
 
-    if bg == 'black':
-        ax.xaxis.line.set_color("black")
-        ax.yaxis.line.set_color("black")
-        ax.zaxis.line.set_color("black")
-    else:
-        ax.xaxis.line.set_color("white")
-        ax.yaxis.line.set_color("white")
-        ax.zaxis.line.set_color("white")
+    # Create a custom colormap for the gradient
+    colors = [(0, 0, 1), (1, 1, 1)]  # Blue to White
+    n_bins = 100  # Number of bins for color transition
+    cmap_name = 'blue_white_gradient'
+    cm = LinearSegmentedColormap.from_list(cmap_name, colors, N=n_bins)
+
+    # Generate a gradient image
+    gradient = np.linspace(0.0, 1.0, 256).reshape(1, -1)
+    gradient = np.vstack([gradient])
+
+    
+    ax.set_axis_off()  # Remove axis for a clean background
+
+
+    # if bg == 'black':
+    #     ax.xaxis.line.set_color("black")
+    #     ax.yaxis.line.set_color("black")
+    #     ax.zaxis.line.set_color("black")
+    # else:
+    #     ax.xaxis.line.set_color("white")
+    #     ax.yaxis.line.set_color("white")
+    #     ax.zaxis.line.set_color("white")
 
     plot_molecule(ax, positions, atom_type, alpha, spheres_3d, hex_bg_color, dataset_info)
 
     if 'qm9' in dataset_info['name'] or 'qm7b' in dataset_info['name']:
         max_value = positions.abs().max().item()
 
-        axis_lim = min(40, max(max_value / 1.5 + 0.3, 3.2))
+        axis_lim = 3
         ax.set_xlim(-axis_lim, axis_lim)
         ax.set_ylim(-axis_lim, axis_lim)
         ax.set_zlim(-axis_lim, axis_lim)
@@ -174,6 +211,7 @@ def plot_data3d(positions, atom_type, dataset_info, camera_elev=0, camera_azim=0
 
     dpi = 120 if spheres_3d else 50
 
+
     if save_path is not None:
         plt.savefig(save_path, bbox_inches='tight', pad_inches=0.0, dpi=dpi)
 
@@ -182,6 +220,7 @@ def plot_data3d(positions, atom_type, dataset_info, camera_elev=0, camera_azim=0
             img_brighter = np.clip(img * 1.4, 0, 255).astype('uint8')
             imageio.imsave(save_path, img_brighter)
     else:
+        return fig
         plt.show()
     plt.close()
 
