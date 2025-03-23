@@ -65,7 +65,7 @@ def get_adjacency(coords, atom_types, dataset_info):
     return A, distances
 
 
-def get_disconnection_penalty(coords, features, mol_sizes, dataset_name='qm9', use_h=True):
+def get_disconnection_penalty(coords, features, mol_sizes, time_fracs, dataset_name='qm9', use_h=True):
     dataset_info = get_dataset_info(dataset_name, use_h)
     num_types = len(dataset_info['atom_types'])
 
@@ -80,6 +80,7 @@ def get_disconnection_penalty(coords, features, mol_sizes, dataset_name='qm9', u
 
         mol_coords = coords[idx : idx + size]
         mol_types = atom_types[idx : idx + size]
+        time_frac = time_fracs[idx : idx + size][0]
 
         A, distances = get_adjacency(mol_coords, mol_types, dataset_info)
         components = get_graph_components(A)
@@ -90,6 +91,7 @@ def get_disconnection_penalty(coords, features, mol_sizes, dataset_name='qm9', u
                 v, u = np.unravel_index(dist_to_other.argmin(), dist_to_other.shape)
                 penalty += dist_to_other[v, u]
 
-        penalties[i] = penalty
+        penalties[i] = penalty * (1 - time_frac) # Penalty weighted more earlier in the noising process
+        idx += size
 
     return penalties
