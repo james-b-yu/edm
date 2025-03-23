@@ -47,7 +47,7 @@ def get_adjacency(coords, atom_types, dataset_info):
     thresholds = TENSOR_1[atom_1_types, atom_2_types]
     distance_diffs = distances - thresholds
     distance_diffs[distance_diffs < 0] = 0
-    A = (distance_diffs <= 0).float()
+    A = (distance_diffs == 0)
     
     return A, distance_diffs
 
@@ -64,7 +64,6 @@ def get_disconnection_penalty(coords, features, mol_sizes, time_fracs, dataset_n
     idx = 0
     for i, size in enumerate(mol_sizes):
         penalty = 0
-
         mol_coords = coords[idx : idx + size]
         mol_types = atom_types[idx : idx + size]
         time_frac = time_fracs[idx : idx + size][0]
@@ -78,10 +77,10 @@ def get_disconnection_penalty(coords, features, mol_sizes, time_fracs, dataset_n
                 argmin_flat = torch.argmin(dist_to_other)
                 v = argmin_flat // dist_to_other.shape[1]
                 u = argmin_flat % dist_to_other.shape[1]
-                # v, u = np.unravel_index(dist_to_other.argmin(), dist_to_other.shape)
                 penalty += dist_to_other[v, u]
+        
 
-        penalties[i] = penalty * (1 - time_frac) # Penalty weighted more earlier in the noising process
+        penalties[i] = penalty / len(components) * (1 - time_frac) # Penalty weighted more earlier in the noising process
         idx += size
 
     return penalties

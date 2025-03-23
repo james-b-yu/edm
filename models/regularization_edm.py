@@ -32,9 +32,9 @@ class RegularizationEDM(EDM):
         epsilon_h = torch.randn_like(in_features.T)
         
         # Apply reverse diffusion update
-        coords = ((1 / (alpha_t)) * (in_coords.T - sigma_t * pred_eps_coords.T) + sigma_t * epsilon_x).T
-        features = ((1 / (alpha_t)) * (in_features.T - sigma_t * pred_eps_features.T) + sigma_t * epsilon_h).T
-        features = torch.cat((F.one_hot(features[:,:5].argmax(dim=-1), num_classes=5).float(), features[:,5:]), dim=1)
+        coords = ((1 / alpha_t) * (in_coords.T - sigma_t * pred_eps_coords.T) + sigma_t * epsilon_x).T
+        features = ((1 / alpha_t) * (in_features.T - sigma_t * pred_eps_features.T) + sigma_t * epsilon_h).T
+        features = F.one_hot(features[:,:5].argmax(dim=-1), num_classes=5)
 
         return coords, features
     
@@ -63,7 +63,7 @@ class RegularizationEDM(EDM):
         z_features = alf_nodes[:, None] * s_features + sig_nodes[:, None] * eps_features
         
         pred_eps_coords, pred_eps_features = self.egnn(n_nodes=data.num_atoms, coords=z_coords, features=z_features, edges=data.edges, reduce=data.reduce, demean=data.demean, time_frac=t)
-        
+
         eps = torch.concat([eps_coords, eps_features], dim=-1)
         pred_eps = torch.concat([pred_eps_coords, pred_eps_features], dim=-1)
         avr_sq_dist = ((eps - pred_eps) ** 2).mean()
@@ -72,9 +72,10 @@ class RegularizationEDM(EDM):
         disc_penalty = get_disconnection_penalty(post_coords, post_features, data.num_atoms, t, self.config.dataset_name, self.config.use_h)
         avr_sq_disc_penalty = (disc_penalty ** 2).mean()
 
-        train_loss = avr_sq_dist + avr_sq_disc_penalty
+        train_loss = avr_sq_dist + avr_sq_disc_penalty.item()
 
         if train_loss.isnan():
             warn("Encountered NAN loss.")
             train_loss = torch.full_like(train_loss, fill_value=torch.nan, requires_grad=True)
+            
         return train_loss
