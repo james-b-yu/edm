@@ -2,7 +2,7 @@ import torch
 import numpy as np
 from collections import deque
 from configs.dataset_reg_config import get_dataset_info
-from configs.bond_config import BONDS_1, MARGIN_1
+from configs.bond_config import TENSOR_1
 
 def bfs(start, A):
     queue = deque()
@@ -32,37 +32,24 @@ def get_graph_components(A):
 
     return components
     
-    
-def get_distance_to_connection(atom_1, atom_2, distance):
-    if atom_1 not in BONDS_1 or atom_2 not in BONDS_1[atom_1]:
-        return np.inf
-        
-    threshold = (BONDS_1[atom_1][atom_2] + MARGIN_1) / 100
-    return np.max(distance - threshold, 0)
-
 
 def get_adjacency(coords, atom_types, dataset_info):
-    x, y, z = coords[:, 0], coords[:, 1], coords[:, 2]
-    A = torch.zeros((len(x), len(x)))
-    distances = torch.zeros((len(x), len(x)))
+    num_atoms = coords.shape[0]
+    
+    # Compute pairwise distances using broadcasting
+    diff = coords.unsqueeze(1) - coords.unsqueeze(0)
+    distances = torch.sqrt(torch.sum(diff ** 2, dim=-1))
+    
+    # Get atom type mappings
+    atom_1_types = atom_types.unsqueeze(0).expand(num_atoms, num_atoms)
+    atom_2_types = atom_types.unsqueeze(1).expand(num_atoms, num_atoms)
 
-    for i in range(len(x)):
-        for j in range(i + 1, len(x)):
-            p1 = torch.Tensor([x[i], y[i], z[i]])
-            p2 = torch.Tensor([x[j], y[j], z[j]])
-            distance = torch.sqrt(torch.sum((p1 - p2) ** 2)).item()
-            
-            atom_types_srt = sorted((atom_types[i], atom_types[j]))
-            atom_1 = dataset_info['atom_types'][atom_types_srt[0]]
-            atom_2 = dataset_info['atom_types'][atom_types_srt[1]]
-            
-            distance_diff = get_distance_to_connection(atom_1, atom_2, distance)
-            distances[i, j] = distance_diff
-            if distance_diff <= 0:
-                A[i, j] = 1
-                A[j, i] = 1
-                
-    return A, distances
+    thresholds = TENSOR_1[atom_1_types, atom_2_types]
+    distance_diffs = distances - thresholds
+    distance_diffs[distance_diffs < 0] = 0
+    A = (distance_diffs <= 0).float()
+    
+    return A, distance_diffs
 
 
 def get_disconnection_penalty(coords, features, mol_sizes, time_fracs, dataset_name='qm9', use_h=True):
@@ -88,7 +75,10 @@ def get_disconnection_penalty(coords, features, mol_sizes, time_fracs, dataset_n
             for component in components:
                 dist_to_other = distances[component]
                 dist_to_other[:, component] = np.inf
-                v, u = np.unravel_index(dist_to_other.argmin(), dist_to_other.shape)
+                argmin_flat = torch.argmin(dist_to_other)
+                v = argmin_flat // dist_to_other.shape[1]
+                u = argmin_flat % dist_to_other.shape[1]
+                # v, u = np.unravel_index(dist_to_other.argmin(), dist_to_other.shape)
                 penalty += dist_to_other[v, u]
 
         penalties[i] = penalty * (1 - time_frac) # Penalty weighted more earlier in the noising process

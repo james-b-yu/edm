@@ -1,3 +1,5 @@
+import torch
+from configs.dataset_reg_config import GEOM
 # Bond lengths from:
 # http://www.wiredchemist.com/chemistry/data/bond_energies_lengths.html
 # And:
@@ -51,3 +53,12 @@ BONDS_PER_TYPE = {1 : BONDS_1,
 
 # Tuned to maximize the stability of the QM9 true samples
 MARGIN_1, MARGIN_2, MARGIN_3 = 10, 5, 3
+
+TENSOR_1 = torch.full((len(GEOM['atom_encoder']), len(GEOM['atom_encoder'])), -(MARGIN_1 / 100 + 1.))
+for (atom_1, others) in BONDS_1.items():
+      atom_enc_1 = GEOM['atom_encoder'][atom_1]
+      for (atom_2, threshold) in others.items():
+            atom_enc_2 = GEOM['atom_encoder'][atom_2]
+            TENSOR_1[atom_enc_1][atom_enc_2] = threshold / 100
+TENSOR_1 += MARGIN_1 / 100
+TENSOR_1 = TENSOR_1.to(torch.device("cuda"))
