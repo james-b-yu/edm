@@ -80,7 +80,7 @@ def get_disconnection_penalty(coords, features, mol_sizes, time_fracs, dataset_n
                 penalty += dist_to_other[v, u]
         
 
-        penalties[i] = penalty / len(components) * (1 - time_frac) # Penalty weighted more earlier in the noising process
+        penalties[i] = penalty / size * (1 - time_frac) # Penalty weighted more earlier in the noising process
         idx += size
 
     return penalties
