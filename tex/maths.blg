@@ -1,0 +1,5 @@
+[0] Config.pm:304> INFO - This is Biber 2.14 (beta)
+[0] Config.pm:307> INFO - Logfile is 'maths.blg'
+[47] biber:322> INFO - === Mon Mar 24, 2025, 02:04:46
+[56] Biber.pm:415> INFO - Reading 'maths.bcf'
+[100] Utils.pm:293> WARN - No data sources defined!

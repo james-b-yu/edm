@@ -1,0 +1,326 @@
+% Unofficial University of Cambridge Poster Template
+% https://github.com/andiac/gemini-cam
+% a fork of https://github.com/anishathalye/gemini
+% also refer to https://github.com/k4rtik/uchicago-poster
+
+\documentclass[final]{beamer}
+
+% ====================
+% Packages
+% ====================
+\usepackage[style=ieee]{biblatex} % verbose or apa depending on cite style
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[size=custom,width=120,height=72,scale=1.0]{beamerposter}
+\usetheme{gemini}
+\usecolortheme{cam}
+\usepackage[protrusion=alltext, expansion=alltext]{microtype}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{tabularx}
+\usepackage{tikz}
+\usepackage{pgfplots}
+\pgfplotsset{compat=1.14}
+\usepackage{anyfontsize}
+\usepackage{lipsum}
+\usepackage{pifont}
+\usepackage{fontawesome5}
+\usepackage{physics}
+\usepackage{mathtools}
+
+\bibliography{poster}
+
+% ====================
+% Lengths
+% ====================
+
+% If you have N columns, choose \sepwidth and \colwidth such that
+% (N+1)*\sepwidth + N*\colwidth = \paperwidth
+\newlength{\sepwidth}
+\newlength{\colwidth}
+\setlength{\sepwidth}{0.025\paperwidth}
+\setlength{\colwidth}{0.3\paperwidth}
+
+\newcommand{\separatorcolumn}{
+  \begin{column}{\sepwidth}
+\end{column}}
+
+\usepackage{tikz,pgfplots}
+\usetikzlibrary{external}
+\pgfplotsset{compat=newest}
+\usepackage{standalone}
+
+% ====================
+% Title
+% ====================
+
+\title{EDM: Equivariant Diffusion for Molecule Generation}
+
+\author{David J.T. Gailey, Katherine E. Jackson, Stella E. Tsiapali, James B. Yu}
+
+% \institute[shortinst]{\inst{1} Some Institute \samelineand \inst{2} Another Institute}
+
+% ====================
+% Footer (optional)
+% ====================
+
+\footercontent{
+  \href{https://github.com/james-b-yu/edm}{\faGithub\ \ github.com/james-b-yu/edm} \hfill
+  MLMI 4 Poster Session --- 24th March 2025 \hfill
+  % \href{mailto:alyssa.p.hacker@example.com}{alyssa.p.hacker@example.com}
+}
+% (can be left out to remove footer)
+
+% ====================
+% Logo (optional)
+% ====================
+
+% use this to include logos on the left and/or right side of the header:
+% \logoright{\includegraphics[height=7cm]{logo1.pdf}}
+% \logoleft{\includegraphics[height=7cm]{logo2.pdf}}
+
+% ====================
+% Body
+% ====================
+\AtBeginBibliography{\tiny}
+\begin{document}
+
+% Refer to https://github.com/k4rtik/uchicago-poster
+% logo: https://www.cam.ac.uk/brand-resources/about-the-logo/logo-downloads
+\addtobeamertemplate{headline}{}
+{
+  \begin{tikzpicture}[remember picture,overlay]
+    \node [anchor=north west, inner sep=3cm] at ([xshift=0.0cm,yshift=1.0cm]current page.north west)
+    {\includegraphics[height=4cm]{logos/EngineeringRevCol.eps}};
+  \end{tikzpicture}
+}
+
+\begin{frame}[t]
+  \begin{columns}[t]
+    \separatorcolumn
+
+    \begin{column}{\colwidth}
+
+      \begin{block}{Motivation}
+
+        % 3D Molecule generation
+
+        \begin{itemize}
+          \item The physical and chemical properties of atoms are determined by the atomic \textbf{spatial} \textbf{configuration} and \textbf{types} of atoms.
+          \item Molecular interactions are \textbf{invariant under Euclidean transformations} (i.e., translation, rotation, reflection), which must be respected to generate valid molecules.
+          \item This is the first work to combine \textbf{3D diffusion modelling} with \textbf{E(3)-equivariant networks} to generate molecules directly in 3D space, which is important in drug discovery, material design, and protein modelling.
+        \end{itemize}
+
+      \end{block}
+
+      \begin{block}{Diffusion Models}
+        The \textit{noising process} \(q(\vb{z}_{t} \mid \vb{z}_{t-1})\) is a Markov process which iteratively adds Gaussian noise to data until the signal is entirely corrupted, \(\vb{z}_{T} \sim \operatorname{N}(\vb{0}, \mathbf{I})\).
+
+        Diffusion models generate data by reversing this. We learn a \textit{generative denoising process} \(p_{\theta}\) with Gaussian transitions, aiming to approximate the \textit{true denoising process} \(q(\vb{z}_{t-1} \mid \vb{z}_{t}, \vb{x})\) without knowledge of the data \(\vb{x}\).
+
+        Starting from a standard Gaussian \(\vb{z}_{T} \sim \operatorname{N}(\vb{0}, \mathbf{I})\), the trained process \(p_{\theta}\) iteratively refines atomic 3D coordinates and the atom types (H, C, O, N, F) to generate valid molecules.
+
+        \vspace{0.1em}
+
+        \begin{figure}
+          \centering
+          \includestandalone[mode=buildnew,width=0.75\linewidth]{diagram}
+          \label{fig:enter-label}
+        \end{figure}
+        \vspace{0.01em}
+
+      \end{block}
+
+      % \begin{block}{Equivariant Graph Neural Networks (EGNNs)}
+
+      %     \vspace{0.5em}
+      % \noindent
+      % \begin{minipage}[c]{0.5\linewidth}
+      %     \centering
+      %     \includegraphics[width=\linewidth]{rotation_denoise_diffuse.png}
+      % \end{minipage}\hfill
+      % \begin{minipage}[c]{0.48\linewidth}
+      %     \begin{itemize}
+      %         \item A function $f$ is equivariant under a transformation group $G$ if $f(g \cdot x) = g \cdot f(x)$ for all $g \in G$.
+      %         \item Through equivariant processes, EGNNs ensure that if the input molecule is transformed (e.g., rotated or translated), the model's output transforms accordingly, leading to \textbf{better generalisation} and \textbf{more accurate molecules}.
+      %         \item Additionally, the noise added, $\varepsilon_x$, has zero mean, so $\sum_i \varepsilon_{x_i} = 0$. Hence, the diffusion process remains translation-invariant by keeping the centre of mass fixed.
+      %     \end{itemize}
+      % \end{minipage}
+
+      % \end{block}
+
+      \begin{block}{Equivariant Graph Neural Networks (EGNNs)}
+
+        % Introducing equivariance and how it is preserved by our graph convolutional networks. Stress that \(\boldsymbol{\varepsilon}^{x}\) lies on a zero-mean subspace of \(\mathbb{R}^{M \times 3}\).
+
+
+
+        % $f(g \cdot x) = g \cdot f(x)$ for all $g \in G$.
+
+        \begin{figure}[h]
+          \centering
+          \begin{minipage}[c]{0.6\linewidth}
+            \centering
+            \includegraphics[width=\linewidth]{Screenshot 2025-03-23 at 19.01.51.png}
+          \end{minipage}
+        \end{figure}
+
+        \begin{itemize}
+            % \item A function $f$ is equivariant under a transformation group $G$ if $f(g \cdot x) = g \cdot f(x)$ for all $g \in G$.
+
+          \item Denoising process $p_{\theta}$ is \textbf{rotation and reflection equivariant} if $p_{\theta} (\vb{z}_{t-1} \mid \vb{z}_{t} ) = p_{\theta}(\mathbf{R}\vb{z}_{t-1} \mid \mathbf{R} \vb{z}_{t} )$ for all rotation-reflection matrices $\mathbf{R}$.
+
+          \item EGNNs are used to incorporate Euclidean equivariance in the denoising process. This improves fit, data efficiency, and generalisation power, compared to non-equivariant models.
+          \item Atom coordinates are fixed to have zero mean, to incorporate translation equivariance.
+        \end{itemize}
+
+      \end{block}
+
+    \end{column}
+
+    \separatorcolumn
+
+    \begin{column}{\colwidth}
+
+      \begin{block}{Loss function}
+
+        Cross-entropy loss (often called NLL in the literature) is intractable, so a variational bound is used:
+        \[
+          \mathop{\mathbb{E}}\qty(-\log p_{\theta}(\vb{x})) \leq \mathop{\mathbb{E}}\qty(- p_{\theta}(\vb{x} \mid \vb{z}_{0})) + \sum_{t=1}^{T} \mathop{\mathbb{E}}\qty[\operatorname{KL}\big( q(\vb{z}_{t-1} \mid \vb{z}_{t}, \vb{x}) \mid \mid p_{\theta}(\vb{z}_{t-1} \mid \vb{z}_{t})\big)]
+        \]
+      \end{block}
+
+      \begin{block}{Relative Scaling}
+
+        \textbf{Features are scaled} to encourage earlier refinement of atom coordinates and leave atom type (H, C, O, N, F) decisions until later in the denoising process. Empirically, this relative scaling leads to significant improvements for molecule stability and NLL.
+
+        \[
+          \vb{x} \coloneqq [\textit{atom coordinates}, \mathsf{0.25} \cdot \textit{one-hot classes}, \mathsf{0.1} \cdot \textit{atom charges}]
+        \]
+
+      \end{block}
+
+      \begin{exampleblock}{Our Extensions}
+        \textbf{Variance learning:} learning a \textbf{diagonal denoising process variance matrix}, allowing for better model fit through awareness of feature heteroskedasticity.
+
+        \textbf{Molecule regularisation:}
+        \begin{itemize}
+          \item  Penalise the generation of disconnected molecules by incorporating a \textbf{regularisation term} into the loss function
+          \item At each iteration, produce the molecule adjacency matrix to identify disconnected components, and compute the minimum distance they need to move to connect.
+          \item A stronger penalty is applied later in the denoising process, as more structural integrity is expected.
+        \end{itemize}
+
+      \end{exampleblock}{}
+
+      \begin{block}{Results Overview}
+
+        \begin{itemize}
+          \item \textbf{Replication} of original results was successful, achieving comparable metrics using less compute.
+          \item \textbf{Learning variance} delivered gains in performance for the no-hydrogen model but is less compelling when modelling hydrogen.
+        \end{itemize}
+
+        \begin{figure}[h]
+          \centering
+          \begin{minipage}[c]{1\linewidth}
+            \centering
+            \includegraphics[width=\linewidth]{67_ci_results_chart_final4.png}
+          \end{minipage}
+        \end{figure}
+
+      \end{block}
+
+    \end{column}
+
+    \separatorcolumn
+
+    \begin{column}{\colwidth}
+
+      \begin{exampleblock}{Our Improvements}
+
+        \begin{itemize}
+          \item \textbf{Compute savings:} trained with hydrogen and then \textbf{fine-tuned without hydrogen} to deliver comparable results for no-hydrogen models using less than \textbf{1/5th of the training steps}.
+          \item \textbf{Faster sampling:} molecule generation is \textbf{115\% faster} than the authors' implementation by \textbf{avoiding redundant calculations} through tracking molecule sizes rather than zero-padding.
+          \item \textbf{Faster evaluation:} \textbf{vectorised computation} of pairwise atom distances and optimising memory and indexing operations \textbf{reduced runtime 63 fold}.
+          \item \textbf{Improved visualisation} to show double and triple bonds.
+        \end{itemize}
+      \end{exampleblock}
+
+      \begin{block}{Detailed Results}
+        \begin{table}[t]\centering
+          \begin{tabular}[t]{@{}
+              >{\raggedright\arraybackslash}p{(\linewidth) * \real{0.2}}@{}
+              >{\centering\arraybackslash}p{(\linewidth) * \real{0.05}}@{}
+              >{\centering\arraybackslash}p{(\linewidth) * \real{0.1}}@{}
+              >{\centering\arraybackslash}p{(\linewidth) * \real{0.216}}@{}
+              >{\centering\arraybackslash}p{(\linewidth) * \real{0.216}}@{}
+              >{\centering\arraybackslash}p{(\linewidth) * \real{0.217}}@{}
+            }
+            \toprule
+            \textbf{Method (QM9)}  &  \textbf{H} & \textbf{NLL} &  \textbf{Atom stable (\%)}  & \textbf{Mol stable (\%)} & \textbf{Valid and Unique (\%)}\\ \midrule
+            \textbf{Original Paper} & \ding{51} & \(\mathsf{-110.7_{\pm1.5}}\) & \(\mathsf{98.7_{\pm0.1}}\)  & \(\mathsf{82.0_{\pm0.4}}\)  & \(\mathsf{90.7_{\pm0.6}}\)  \\
+
+            \textbf{No extensions} & \ding{51} & \(\mathsf{-112.1_{\pm 1.1}}\) & \(\mathsf{98.3_{\pm 0.1}}\)  & \(\mathsf{81.4_{\pm 0.4}}\)  & \(\mathsf{91.3_{\pm 0.8}}\)  \\
+            \textbf{Learning variance} & \ding{51} & \(\mathsf{-121.9_{\pm 2.0}}\) & \(\mathsf{98.1_{\pm0.1}}\) & \(\mathsf{79.4_{\pm1.6}}\) & \(\mathsf{90.5_{\pm1.7}}\)\\
+            \midrule
+            \textbf{Original Paper} &  & --- & --- & --- & \(\mathsf{94.3_{\pm0.2}}\) \\
+            \textbf{No extensions} &  & \(\mathsf{-22.8_{\pm1.8}}\) & --- & --- & \(\mathsf{96.0_{\pm0.6}}\) \\
+
+            \textbf{Learning variance} &  & \(\mathsf{-32.0_{\pm1.2}}\) & --- & --- & \(\mathsf{97.4_{\pm0.8}}\)\\
+            \bottomrule
+          \end{tabular}
+          \caption{Results on the QM9 dataset. Negative log-likelihood (NLL), atom stability, molecule stability and proportion of molecules which are valid and unique are calculated using the mean and standard deviation across 3 runs of 1000 samples. NLL and stability metrics on models trained with and without hydrogens are not directly comparable} \label{tab-qm9-results}
+        \end{table}
+
+      \end{block}
+
+
+
+      \begin{block}{Sampled Molecules}
+        % \centering
+        % \subfigure[Caption 1]{\includegraphics[width=0.3\textwidth]{molecule_images/sample_000.png}}
+        % \subfigure[Caption 2]{\includegraphics[width=0.3\textwidth]{molecule_images/sample_131.png}}
+        % \subfigure[Caption 3]{\includegraphics[width=0.3\textwidth]{molecule_images/sample_011.png}}
+
+        \begin{figure}
+          \includestandalone[mode=buildnew,width=\linewidth]{samples}
+          \caption{Sampled molecules from our implementation, trained on QM9. Hydrogen (white), Carbon (grey), Oxygen (red), Nitrogen (blue).}
+        \end{figure}
+
+        % \begin{figure}[h]
+        %     \centering
+        %     \begin{minipage}[c]{0.5\linewidth}
+        %         \centering
+        %         \subcaption{\includegraphics[width=0.3\linewidth]{molecule_images/sample_000.png}}
+        %     \end{minipage}
+        % \end{figure}
+
+      \end{block}
+
+      \begin{block}{Key Takeaways}
+
+        \begin{itemize}
+          \item \textbf{Replicated} the authors' paper and verified their results. \\
+          \item \textbf{Rewrote core components}, significantly reducing runtime and improving computational efficiency across the pipeline. \\
+          \item \textbf{Learning denoising variance} gave better metrics for no-hydrogen models but could be overestimating the support of the denoising process when modelling hydrogens. \\
+          \item \textbf{One limitation} of this framework is that the atom bonds themselves are not included in the diffusion process, hindering the regularisation of disconnected / unrealistic molecules.
+        \end{itemize}
+
+      \end{block}
+
+
+
+      \begin{block}{References}
+        \nocite{*}
+        \printbibliography
+
+      \end{block}
+
+
+
+    \end{column}
+
+    \separatorcolumn
+  \end{columns}
+\end{frame}
+
+\end{document}

@@ -15,32 +15,50 @@
   % Draw five boxes with gradient fill manually (gradient upwards)
   \shade[bottom color=blue!20, top color=white] (-\gap,0) rectangle ++(\boxsize, \boxsize);
   \draw[thick] (-\gap,0) rectangle ++(\boxsize, \boxsize)node (A){};
-  \node at (\boxsize/2-\gap, \boxsize/2 - 0.5em) {
-    \includegraphics[width=\boxsize,height=\boxsize]{image_0.png}
+  \node[opacity=0.8] at (\boxsize/2-\gap, \boxsize/2 - 0.5em) {
+    \includegraphics[width=\boxsize,height=\boxsize]{step_images/image_0.png}
+  };
+  \node[opacity=0.8] at (\boxsize/2-\gap, \boxsize/2 - 0.5em) {
+    \includegraphics[width=\boxsize,height=\boxsize]{step_images/image_5.png}
+  };
+  \node[opacity=0.8] at (\boxsize/2-\gap, \boxsize/2 - 0.5em) {
+    \includegraphics[width=\boxsize,height=\boxsize]{step_images/image_10.png}
   };
 
   \shade[bottom color=blue!20, top color=white] (\boxsize + \gap,0) rectangle ++(\boxsize, \boxsize);
   \draw[thick] (\boxsize + \gap,0) rectangle ++(\boxsize, \boxsize)node (B){};
-  \node at (1.5*\boxsize + \gap, \boxsize/2 - 0.5em) {
-    \includegraphics[width=\boxsize,height=\boxsize]{image_200.png}
+  \node[opacity=0.8] at (1.5*\boxsize + \gap, \boxsize/2 - 0.5em) {
+    \includegraphics[width=\boxsize,height=\boxsize]{step_images/image_200.png}
+  };
+  \node[opacity=0.8] at (1.5*\boxsize + \gap, \boxsize/2 - 0.5em) {
+    \includegraphics[width=\boxsize,height=\boxsize]{step_images/image_205.png}
+  };
+  \node[opacity=0.8] at (1.5*\boxsize + \gap, \boxsize/2 - 0.5em) {
+    \includegraphics[width=\boxsize,height=\boxsize]{step_images/image_210.png}
   };
 
   \shade[bottom color=blue!20, top color=white] (2*\boxsize + 2*\gap,0) rectangle ++(\boxsize, \boxsize);
   \draw[thick] (2*\boxsize + 2*\gap,0) rectangle ++(\boxsize, \boxsize)node (C){};
-  \node at (2.5*\boxsize + 2*\gap, \boxsize/2 - 0.5em) {
-    \includegraphics[width=\boxsize,height=\boxsize]{image_500.png}
+  \node[opacity=0.8] at (2.5*\boxsize + 2*\gap, \boxsize/2 - 0.5em) {
+    \includegraphics[width=\boxsize,height=\boxsize]{step_images/image_500.png}
+  };
+  \node[opacity=0.8] at (2.5*\boxsize + 2*\gap, \boxsize/2 - 0.5em) {
+    \includegraphics[width=\boxsize,height=\boxsize]{step_images/image_505.png}
+  };
+  \node[opacity=0.8] at (2.5*\boxsize + 2*\gap, \boxsize/2 - 0.5em) {
+    \includegraphics[width=\boxsize,height=\boxsize]{step_images/image_510.png}
   };
 
   \shade[bottom color=blue!20, top color=white] (3*\boxsize + 3*\gap + \gap,0) rectangle ++(\boxsize, \boxsize);
   \draw[thick] (3*\boxsize + 3*\gap + \gap,0) rectangle ++(\boxsize, \boxsize) node(D){};
   \node at (3.5*\boxsize + 3*\gap + \gap, \boxsize/2 - 0.5em) {
-    \includegraphics[width=\boxsize,height=\boxsize]{image_800.png}
+    \includegraphics[width=\boxsize,height=\boxsize]{step_images/image_-2.png}
   };
 
   \shade[bottom color=blue!20, top color=white] (4*\boxsize + 4*\gap + \gap,0) rectangle ++(\boxsize, \boxsize);
   \draw[thick] (4*\boxsize + 4*\gap + \gap,0) rectangle ++(\boxsize, \boxsize) node (E){};
   \node at (4.5*\boxsize + 4*\gap + \gap, \boxsize/2 - 0.5em) {
-    \includegraphics[width=\boxsize,height=\boxsize]{image_-1.png}
+    \includegraphics[width=\boxsize,height=\boxsize]{step_images/image_-1.png}
   };
 
   \draw[thick, -latex, dashed]($(A)-(\boxsize/2-2mm, -2mm)$) to [bend left,looseness=0.8] ($(B)-(\boxsize/2+2mm, -2mm)$);
