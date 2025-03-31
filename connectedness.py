@@ -30,7 +30,6 @@ def compute_connectedness(samples, args):
     
     logfile = f"sampling_log_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.txt"
     with open(logfile, "a+") as f:
-        f.write(f"############# Final Results #############\n")
         f.write(f"percentage_molecules_connected: {percentage_molecules_connected:.4f} %\n")
     
     return percentage_molecules_connected, res
