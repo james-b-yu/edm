@@ -7,12 +7,12 @@ def check_connectedness(coords, features, dataset_info):
     num_types = len(dataset_info['atom_types'])
 
     coords = coords.view(-1, 3)
-    features = features[:num_types].view(-1, num_types).type(torch.float32)
+    features = features[:, :num_types].view(-1, num_types).type(torch.float32)
     atom_types = torch.argmax(features, dim=1)
     
     A, distances = get_adjacency(coords, atom_types, dataset_info)
     components = get_graph_components(A)
-    is_connected = (len(components) == 1)
+    is_connected = 1 if (len(components) == 1) else 0
     
     return is_connected
     
